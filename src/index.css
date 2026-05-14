@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ferrari: #D40000;
+  --color-ferrari-dark: #8B0000;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  body {
+    @apply bg-[#1a1a1a] text-slate-900 antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer components {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Professional Polish Headings */
+  .brand-title {
+    @apply font-black italic tracking-tighter uppercase;
+  }
+  
+  .glass-card {
+    @apply bg-white rounded-[32px] shadow-2xl border border-white/20;
+  }
+}
