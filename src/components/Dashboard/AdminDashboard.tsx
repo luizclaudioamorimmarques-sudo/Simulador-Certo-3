@@ -406,6 +406,7 @@ function ProductManager({ products, onRefresh }: { products: Product[], onRefres
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [filterBlock, setFilterBlock] = useState<'Todos' | 'Créditos' | 'Comissões' | 'Conquista'>('Todos');
 
   const handleSave = async () => {
     if (!form.name || !form.block) {
@@ -456,6 +457,8 @@ function ProductManager({ products, onRefresh }: { products: Product[], onRefres
     setForm({ block: 'Créditos', multiplier: 0, specialist_rate: 0, leader_rate: 0, segment: '', is_focus: false });
     setEditingId(null);
   };
+
+  const filteredProducts = products.filter(p => filterBlock === 'Todos' || p.block === filterBlock);
 
   return (
     <div className="space-y-4">
@@ -578,11 +581,26 @@ function ProductManager({ products, onRefresh }: { products: Product[], onRefres
         >
           {loading ? 'SALVANDO...' : <><Save className="w-4 h-4 mr-2" /> {editingId ? 'ATUALIZAR PRODUTO' : 'ADICIONAR PRODUTO'}</>}
         </button>
+
+        <div className="flex bg-slate-50 p-1 rounded-xl gap-1 border border-slate-100">
+          {['Todos', 'Créditos', 'Comissões', 'Conquista'].map((b) => (
+            <button
+              key={b}
+              onClick={() => setFilterBlock(b as any)}
+              className={cn(
+                "flex-1 py-2 text-[8px] font-black rounded-lg transition-all",
+                filterBlock === b ? "bg-white text-ferrari shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
+              )}
+            >
+              {b.toUpperCase()}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Produtos Cadastrados</h3>
-        {products.map(p => (
+        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Produtos Cadastrados ({filterBlock === 'Todos' ? products.length : filteredProducts.length})</h3>
+        {filteredProducts.map(p => (
           <div key={p.id} className={cn(
             "bg-white p-4 rounded-2xl shadow-sm border flex items-center justify-between group",
             p.is_focus ? "border-yellow-200 ring-2 ring-yellow-400/20" : "border-slate-100"
@@ -658,6 +676,7 @@ function ProductManager({ products, onRefresh }: { products: Product[], onRefres
 
 function GoalManager({ goals, onRefresh, focusMode = false }: { goals: Goal[], onRefresh: () => void | Promise<void>, focusMode?: boolean }) {
   const [form, setForm] = useState<Partial<Goal>>({ profile: 'Especialista Santander', block: 'Créditos', value: 0, is_focus: focusMode });
+  const [filterProfile, setFilterProfile] = useState<'Líder' | 'Especialista'>('Líder');
 
   // Update form if focusMode changes
   useEffect(() => {
@@ -812,11 +831,34 @@ function GoalManager({ goals, onRefresh, focusMode = false }: { goals: Goal[], o
         >
           {loading ? 'SALVANDO...' : editingGoal ? 'Atualizar Meta' : 'Salvar Meta'}
         </button>
+
+        <div className="flex bg-slate-50 p-1 rounded-xl gap-1 border border-slate-100">
+          <button
+            onClick={() => setFilterProfile('Líder')}
+            className={cn(
+              "flex-1 py-2 text-[10px] font-black rounded-lg transition-all",
+              filterProfile === 'Líder' ? "bg-white text-ferrari shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
+            )}
+          >
+            LÍDER
+          </button>
+          <button
+            onClick={() => setFilterProfile('Especialista')}
+            className={cn(
+              "flex-1 py-2 text-[10px] font-black rounded-lg transition-all",
+              filterProfile === 'Especialista' ? "bg-white text-ferrari shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
+            )}
+          >
+            ESPECIALISTAS
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2">
-        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Metas Atuais</h4>
-        {goals.map(g => (
+        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Metas Atuais ({filterProfile === 'Líder' ? 'Líder' : 'Especialistas'})</h4>
+        {goals
+          .filter(g => filterProfile === 'Líder' ? g.profile === 'Líder' : g.profile.includes('Especialista'))
+          .map(g => (
           <div key={g.id} className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center text-xs">
             <div className="flex-1">
               <div className="flex items-center space-x-2">
