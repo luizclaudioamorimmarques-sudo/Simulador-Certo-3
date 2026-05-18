@@ -8,6 +8,7 @@ import { ptBR } from 'date-fns/locale';
 
 export default function SantanderSpecialistDashboard({ user, onLogout }: { user: User, onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState('home');
+  const [remTab, setRemTab] = useState<'total' | 'mult'>('total');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [productions, setProductions] = useState<(Production & { product: Product })[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -142,7 +143,33 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
   };
 
   const totalFat = Object.values(stats).reduce((a: any, b: any) => a + b.faturamento, 0) as number;
-  const totalRem = Object.values(stats).reduce((a: any, b: any) => a + b.remuneração, 0) as number;
+  
+  // Calculate Block Multiplier Logic
+  const challenges = Object.keys(stats).map(k => {
+    const s = stats[k];
+    const blockMeta = s.meta || 0;
+    const focusMeta = s.meta_foco || 0;
+    const blockFat = s.faturamento || 0;
+    const focusFat = s.faturamento_foco || 0;
+
+    const blockAchieved = blockMeta > 0 ? (blockFat >= blockMeta) : false;
+    const focusAchieved = focusMeta > 0 ? (focusFat >= focusMeta) : true;
+
+    return {
+      name: k,
+      achieved: blockAchieved && focusAchieved,
+      blockMeta,
+      focusMeta,
+      blockFat,
+      focusFat
+    };
+  });
+
+  const achievedCount = challenges.filter(c => c.achieved).length;
+  const blockMultiplier = achievedCount === 3 ? 4 : achievedCount === 2 ? 3 : achievedCount === 1 ? 2 : 1;
+
+  const totalRemBase = Object.values(stats).reduce((a: any, b: any) => a + b.remuneração, 0) as number;
+  const totalRem = totalRemBase * blockMultiplier;
   const totalMeta = Object.values(stats).reduce((a: any, b: any) => a + b.meta, 0) as number;
   const atingimento = totalMeta > 0 ? (totalFat / totalMeta) * 100 : 0;
 
@@ -206,14 +233,14 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
               <>
                 <div className="bg-white p-4 rounded-3xl border shadow-sm space-y-4">
                   <div className="flex justify-between items-end">
-                    <div><p className="text-[10px] font-bold text-slate-400 uppercase">Faturamento</p><h3 className="text-2xl font-black">R$ {totalFat.toLocaleString('pt-BR')}</h3></div>
+                    <div><p className="text-[10px] font-bold text-slate-400 uppercase">Faturamento</p><h3 className="text-2xl font-black">R$ {totalFat.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3></div>
                     <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-black">{atingimento.toFixed(1)}%</div>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     {Object.keys(stats).map(k => (
                       <div key={k} className="bg-slate-50 p-2 rounded-xl text-center">
                         <p className="text-[8px] font-bold text-slate-400 uppercase">{k}</p>
-                        <p className="text-[10px] font-black">R$ {stats[k].faturamento.toLocaleString('pt-BR')}</p>
+                        <p className="text-[10px] font-black">R$ {stats[k].faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                       </div>
                     ))}
                   </div>
@@ -234,7 +261,7 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
                       return (
                         <div key={`${k}-focus`} className="bg-white/50 p-2 rounded-xl text-center border border-orange-100">
                           <p className="text-[8px] font-bold text-orange-400 uppercase">{k}</p>
-                          <p className="text-[10px] font-black text-slate-800">R$ {focusFat.toLocaleString('pt-BR')}</p>
+                          <p className="text-[10px] font-black text-slate-800">R$ {focusFat.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                           {focusGoal > 0 && (
                             <p className={cn(
                               "text-[8px] font-black mt-1",
@@ -284,7 +311,7 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
                     </div>
                     <div className="flex items-center space-x-2">
                       <p className="font-black text-sm mr-2">
-                        {p.product?.block === 'Conquista' ? `${p.amount} un.` : `R$ ${p.amount.toLocaleString()}`}
+                        {p.product?.block === 'Conquista' ? `${p.amount} un.` : `R$ ${p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       </p>
                       <button 
                         onClick={() => {
@@ -313,9 +340,99 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
             )}
 
             {activeTab === 'var' && (
-              <div className="bg-[#FF0000] text-white p-6 rounded-3xl shadow-lg flex justify-between items-center">
-                <div><p className="text-xs font-bold opacity-80 uppercase">Remuneração</p><h3 className="text-3xl font-black italic">R$ {totalRem.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3></div>
-                <Wallet className="w-10 h-10 opacity-30" />
+              <div className="space-y-4">
+                <div className="flex bg-white rounded-2xl p-1 border border-slate-100 shadow-sm">
+                  <button 
+                    onClick={() => setRemTab('total')}
+                    className={cn(
+                      "flex-1 py-3 text-[10px] font-black rounded-xl transition-all",
+                      remTab === 'total' ? "bg-red-600 text-white shadow-lg" : "text-slate-400"
+                    )}
+                  >
+                    REMUNERAÇÃO
+                  </button>
+                  <button 
+                    onClick={() => setRemTab('mult')}
+                    className={cn(
+                      "flex-1 py-3 text-[10px] font-black rounded-xl transition-all",
+                      remTab === 'mult' ? "bg-red-600 text-white shadow-lg" : "text-slate-400"
+                    )}
+                  >
+                    MULTIPLICADORES
+                  </button>
+                </div>
+
+                {remTab === 'total' ? (
+                  <div className="bg-[#FF0000] text-white p-6 rounded-3xl shadow-lg flex justify-between items-center relative overflow-hidden">
+                    <div className="relative z-10">
+                      <p className="text-xs font-bold opacity-80 uppercase">Remuneração Final {blockMultiplier > 1 && `(${blockMultiplier}x)`}</p>
+                      <h3 className="text-3xl font-black italic">R$ {totalRem.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                      {blockMultiplier > 1 && (
+                        <p className="text-[10px] font-bold opacity-70 mt-1">
+                          Base: R$ {totalRemBase.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} x {blockMultiplier}
+                        </p>
+                      )}
+                    </div>
+                    <Wallet className="w-16 h-16 opacity-20 absolute -right-4 -bottom-4 z-0" />
+                  </div>
+                ) : (
+                  <div className="space-y-4 animate-in fade-in duration-500">
+                    <div className="bg-white p-6 rounded-3xl border shadow-sm space-y-4 text-center">
+                      <div className="flex justify-center items-center space-x-2">
+                        <Star className={cn("w-6 h-6", achievedCount > 0 ? "text-yellow-400 fill-yellow-400" : "text-slate-200")} />
+                        <h2 className="text-4xl font-black italic text-slate-800">{blockMultiplier}x</h2>
+                        <Star className={cn("w-6 h-6", achievedCount > 1 ? "text-yellow-400 fill-yellow-400" : "text-slate-200")} />
+                      </div>
+                      <p className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                        {achievedCount} {achievedCount === 1 ? 'BLOCO ATINGIDO' : 'BLOCOS ATINGIDOS'}
+                      </p>
+                      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden flex">
+                        <div className={cn("h-full transition-all duration-1000", achievedCount >= 1 ? "bg-green-500" : "bg-slate-200")} style={{ width: '33.33%' }} />
+                        <div className={cn("h-full transition-all duration-1000 border-l border-white", achievedCount >= 2 ? "bg-green-500" : "bg-slate-200")} style={{ width: '33.33%' }} />
+                        <div className={cn("h-full transition-all duration-1000 border-l border-white", achievedCount >= 3 ? "bg-green-500" : "bg-slate-200")} style={{ width: '33.34%' }} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-1">Desafios dos Blocos</h4>
+                      {challenges.map(c => (
+                        <div key={c.name} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className={cn("w-3 h-3 rounded-full shadow-sm", c.achieved ? "bg-green-500" : "bg-red-500")} />
+                            <div>
+                              <h4 className="font-black text-sm text-slate-800 uppercase tracking-tight">{c.name}</h4>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase leading-none">
+                                {c.focusMeta > 0 ? 'Meta Bloco + Meta Foco' : 'Meta do Bloco'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                             <p className="text-[10px] font-black text-slate-700 italic">
+                               {Math.round(c.blockMeta > 0 ? (c.blockFat / c.blockMeta) * 100 : 0)}% Bloco
+                             </p>
+                             {c.focusMeta > 0 && (
+                               <p className="text-[10px] font-black text-slate-700 italic">
+                                 {Math.round(c.focusFat / c.focusMeta * 100)}% Foco
+                               </p>
+                             )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-300">
+                      <h5 className="text-[9px] font-black text-slate-400 uppercase mb-2">Regras do Multiplicador</h5>
+                      <ul className="text-[10px] font-bold text-slate-600 space-y-1">
+                        <li className="flex justify-between"><span>1 Bloco atingido</span> <span className="text-red-600">2x</span></li>
+                        <li className="flex justify-between"><span>2 Blocos atingidos</span> <span className="text-red-600">3x</span></li>
+                        <li className="flex justify-between"><span>3 Blocos atingidos</span> <span className="text-red-600">4x</span></li>
+                      </ul>
+                      <p className="text-[8px] text-slate-400 mt-3 leading-tight italic">
+                        * Atingimento = 100% ou mais da meta do bloco + 100% ou mais da meta dos produtos foco.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

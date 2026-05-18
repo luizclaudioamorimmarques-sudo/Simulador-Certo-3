@@ -22,6 +22,7 @@ type Tab = 'home' | 'productions' | 'report' | 'variable';
 
 export default function SpecialistStoreDashboard({ user, onLogout }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<Tab>('home');
+  const [remTab, setRemTab] = useState<'total' | 'mult'>('total');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [productions, setProductions] = useState<(Production & { product: Product })[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -57,30 +58,44 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
       if (pErr) throw pErr;
       if (pData) setProducts(pData);
 
-      const { data: gData, error: gErr } = await supabase.from('goals').select('*').eq('profile', user.profile);
+      // Use Líder goals for indicators to match store performance
+      const { data: gData, error: gErr } = await supabase.from('goals').select('*').eq('profile', 'Líder');
       if (gErr) throw gErr;
       if (gData) setGoals(gData);
 
       const startDate = `${selectedMonth}-01`;
-      // Use a more reliable way to get the last day of the month
       const [year, month] = selectedMonth.split('-').map(Number);
       const lastDay = new Date(year, month, 0).getDate();
       const endDate = `${selectedMonth}-${lastDay.toString().padStart(2, '0')}`;
 
-      console.log('Fetching productions for:', { userId: user.id, startDate, endDate });
+      // Get store ID
+      let storeId = user.store_id;
+      if (!storeId) {
+        const uStore = (user as any).store || (user as any).stores;
+        storeId = Array.isArray(uStore) ? uStore[0]?.id : uStore?.id;
+      }
+
+      if (!storeId) {
+        setLoading(false);
+        return;
+      }
+
+      // Fetch all users in the store to get global production
+      const { data: storeUsers } = await supabase.from('users').select('id').eq('store_id', storeId);
+      const userIds = storeUsers ? storeUsers.map(u => u.id) : [user.id];
+
+      console.log('Fetching global store productions for:', { storeId, startDate, endDate });
 
       const { data: prodData, error: prodErr } = await supabase
         .from('productions')
         .select('*, product:products(*)')
-        .eq('user_id', user.id)
+        .in('user_id', userIds)
         .gte('date', startDate)
         .lte('date', endDate)
         .order('date', { ascending: false });
       
       if (prodErr) throw prodErr;
-      console.log('Productions found:', prodData?.length);
       if (prodData) {
-        setProductions(prodData);
         const newStats = {
           Créditos: { faturamento: 0, remuneração: 0, meta: 0, faturamento_foco: 0, meta_foco: 0 },
           Comissões: { faturamento: 0, remuneração: 0, meta: 0, faturamento_foco: 0, meta_foco: 0 },
@@ -119,7 +134,10 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
             const multiplier = parseFloat(p.product.multiplier?.toString() || '0');
             const faturamento = amount * multiplier;
             
-            const rate = p.product.specialist_rate ?? p.product.variable_rate ?? 0;
+            // Specialist rate is 50% of Leader rate
+            const leaderRate = parseFloat((p.product.leader_rate ?? p.product.variable_rate ?? 0).toString());
+            const rate = leaderRate * 0.5;
+            
             // Apply NPS Multiplier here
             const rem_var = (faturamento * (rate / 100)) * npsMultiplier;
             
@@ -133,6 +151,10 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
           }
         });
         setStats(newStats);
+        
+        // For the recent history tab, we might want to show only the user's OWN productions
+        // Let's filter them for the 'productions' and 'report' tabs
+        setProductions(prodData.filter(p => p.user_id === user.id));
       }
 
       const { data: rData } = await supabase
@@ -173,7 +195,33 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
   };
 
   const totalFaturamento = stats.Créditos.faturamento + stats.Comissões.faturamento + stats.Conquista.faturamento;
-  const totalRemuneração = stats.Créditos.remuneração + stats.Comissões.remuneração + stats.Conquista.remuneração;
+  
+  // Calculate Block Multiplier Logic (Store Performance)
+  const challenges = Object.keys(stats).map(k => {
+    const s = (stats as any)[k];
+    const blockMeta = s.meta || 0;
+    const focusMeta = s.meta_foco || 0;
+    const blockFat = s.faturamento || 0;
+    const focusFat = s.faturamento_foco || 0;
+
+    const blockAchieved = blockMeta > 0 ? (blockFat >= blockMeta) : false;
+    const focusAchieved = focusMeta > 0 ? (focusFat >= focusMeta) : true;
+
+    return {
+      name: k,
+      achieved: blockAchieved && focusAchieved,
+      blockMeta,
+      focusMeta,
+      blockFat,
+      focusFat
+    };
+  });
+
+  const achievedCount = challenges.filter(c => c.achieved).length;
+  const blockMultiplier = achievedCount === 3 ? 4 : achievedCount === 2 ? 3 : achievedCount === 1 ? 2 : 1;
+
+  const totalRemBase = stats.Créditos.remuneração + stats.Comissões.remuneração + stats.Conquista.remuneração;
+  const totalRemuneração = totalRemBase * blockMultiplier;
   const totalMeta = stats.Créditos.meta + stats.Comissões.meta + stats.Conquista.meta;
   const atingimento = totalMeta > 0 ? (totalFaturamento / totalMeta) * 100 : 0;
 
@@ -271,21 +319,21 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
                 <div className="space-y-4">
                   <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">REMUNERRAÇÃO VARIÁVEL TOTAL</p>
-                    <p className="text-2xl font-black text-ferrari italic">R$ {totalRemuneração.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <p className="text-2xl font-black text-ferrari italic">R$ {totalRemuneração.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                   
                   <div className="grid grid-cols-1 gap-2">
                     <div className="flex items-center justify-between bg-white p-4 rounded-xl border-l-[6px] border-blue-500 shadow-sm">
                       <span className="text-xs font-black text-gray-600">CRÉDITOS</span>
-                      <span className="text-sm font-black italic">R$ {stats.Créditos.faturamento.toLocaleString('pt-BR')}</span>
+                      <span className="text-sm font-black italic">R$ {stats.Créditos.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex items-center justify-between bg-white p-4 rounded-xl border-l-[6px] border-green-500 shadow-sm">
                       <span className="text-xs font-black text-gray-600">COMISSÕES</span>
-                      <span className="text-sm font-black italic">R$ {stats.Comissões.faturamento.toLocaleString('pt-BR')}</span>
+                      <span className="text-sm font-black italic">R$ {stats.Comissões.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex items-center justify-between bg-white p-4 rounded-xl border-l-[6px] border-orange-500 shadow-sm">
                       <span className="text-xs font-black text-gray-600">CONQUISTA</span>
-                      <span className="text-sm font-black italic">R$ {stats.Conquista.faturamento.toLocaleString('pt-BR')}</span>
+                      <span className="text-sm font-black italic">R$ {stats.Conquista.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   </div>
                 </div>
@@ -308,7 +356,7 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
                           <div className="flex justify-between items-end">
                             <span className="text-[9px] font-bold text-orange-400 uppercase">{k}</span>
                             <div className="text-right">
-                              <span className="text-[10px] font-black text-slate-800">R$ {focusFat.toLocaleString('pt-BR')}</span>
+                              <span className="text-[10px] font-black text-slate-800">R$ {focusFat.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                               {focusGoal > 0 && (
                                 <span className={cn(
                                   "ml-2 text-[10px] font-black",
@@ -390,7 +438,7 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
                     <div className="text-right flex items-center space-x-2">
                       <div className="mr-2">
                         <p className="font-black text-gray-900 leading-none">
-                          {p.product?.block === 'Conquista' ? `${p.amount} un.` : `R$ ${p.amount.toLocaleString()}`}
+                          {p.product?.block === 'Conquista' ? `${p.amount} un.` : `R$ ${p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                         </p>
                         <p className="text-[10px] text-gray-400">Fat: R$ {(p.amount * (p.product?.multiplier || 0)).toFixed(2)}</p>
                       </div>
@@ -422,11 +470,96 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
 
             {activeTab === 'variable' && (
               <div className="space-y-4">
-                <div className="bg-ferrari text-white p-8 rounded-[40px] shadow-2xl border-b-[8px] border-ferrari-dark flex flex-col items-center text-center">
-                  <p className="text-[10px] font-black uppercase opacity-60 tracking-[0.2em] mb-2">Remuneração Acumulada</p>
-                  <h3 className="text-4xl font-black italic tracking-tighter">R$ {totalRemuneração.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
-                  <Wallet className="w-12 h-12 opacity-20 mt-4" />
+                <div className="flex bg-white rounded-2xl p-1 border border-gray-100 shadow-sm">
+                  <button 
+                    onClick={() => setRemTab('total')}
+                    className={cn(
+                      "flex-1 py-3 text-[10px] font-black rounded-xl transition-all",
+                      remTab === 'total' ? "bg-ferrari text-white shadow-lg" : "text-gray-400"
+                    )}
+                  >
+                    REMUNERAÇÃO
+                  </button>
+                  <button 
+                    onClick={() => setRemTab('mult')}
+                    className={cn(
+                      "flex-1 py-3 text-[10px] font-black rounded-xl transition-all",
+                      remTab === 'mult' ? "bg-ferrari text-white shadow-lg" : "text-gray-400"
+                    )}
+                  >
+                    MULTIPLICADORES
+                  </button>
                 </div>
+
+                {remTab === 'total' ? (
+                  <div className="bg-ferrari text-white p-8 rounded-[40px] shadow-2xl border-b-[8px] border-ferrari-dark flex flex-col items-center text-center animate-in fade-in duration-500 relative overflow-hidden">
+                    <div className="relative z-10">
+                      <p className="text-[10px] font-black uppercase opacity-60 tracking-[0.2em] mb-2">Remuneração Final {blockMultiplier > 1 && `(${blockMultiplier}x)`}</p>
+                      <h3 className="text-4xl font-black italic tracking-tighter">R$ {totalRemuneração.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                      {blockMultiplier > 1 && (
+                        <p className="text-[10px] font-bold opacity-70 mt-2">
+                          Base: R$ {totalRemBase.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} x {blockMultiplier}
+                        </p>
+                      )}
+                    </div>
+                    <Wallet className="w-12 h-12 opacity-20 absolute -right-4 -bottom-4 z-0" />
+                  </div>
+                ) : (
+                  <div className="space-y-4 animate-in fade-in duration-500">
+                    <div className="bg-white p-6 rounded-[32px] border shadow-sm space-y-4 text-center">
+                      <div className="flex justify-center items-center space-x-2">
+                        <Star className={cn("w-6 h-6", achievedCount > 0 ? "text-yellow-400 fill-yellow-400" : "text-slate-200")} />
+                        <h2 className="text-4xl font-black italic text-gray-800">{blockMultiplier}x</h2>
+                        <Star className={cn("w-6 h-6", achievedCount > 1 ? "text-yellow-400 fill-yellow-400" : "text-slate-200")} />
+                      </div>
+                      <p className="text-xs font-black text-gray-500 uppercase tracking-widest leading-tight">
+                        LOJA ATINGIU {achievedCount} {achievedCount === 1 ? 'DESAFIO' : 'DESAFIOS'}
+                      </p>
+                      <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden flex">
+                        <div className={cn("h-full transition-all duration-1000", achievedCount >= 1 ? "bg-ferrari" : "bg-slate-200")} style={{ width: '33.33%' }} />
+                        <div className={cn("h-full transition-all duration-1000 border-l-2 border-white", achievedCount >= 2 ? "bg-ferrari" : "bg-slate-200")} style={{ width: '33.33%' }} />
+                        <div className={cn("h-full transition-all duration-1000 border-l-2 border-white", achievedCount >= 3 ? "bg-ferrari" : "bg-slate-200")} style={{ width: '33.34%' }} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2 mb-1">Status de Desafios (Loja)</h4>
+                      {challenges.map(c => (
+                        <div key={c.name} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className={cn("w-3 h-3 rounded-full shadow-sm", c.achieved ? "bg-green-500" : "bg-red-500")} />
+                            <div>
+                              <h4 className="font-black text-sm text-gray-800 uppercase tracking-tight">{c.name}</h4>
+                              <p className="text-[9px] font-bold text-gray-400 uppercase leading-none">
+                                {c.focusMeta > 0 ? 'Meta Bloco + Foco' : 'Meta do Bloco'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                             <p className="text-[10px] font-black text-gray-700 italic">
+                               {Math.round(c.blockMeta > 0 ? (c.blockFat / c.blockMeta) * 100 : 0)}%
+                             </p>
+                             {c.focusMeta > 0 && (
+                               <p className="text-[9px] font-bold text-orange-500">
+                                 Foco: {Math.round(c.focusFat / c.focusMeta * 100)}%
+                               </p>
+                             )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="bg-gray-50/50 p-5 rounded-[32px] border border-dashed border-gray-300">
+                      <h5 className="text-[10px] font-black text-gray-400 uppercase mb-3">Como Funciona (Especialista de Loja)</h5>
+                      <p className="text-[10px] font-bold text-gray-600 mb-2 italic">Você acompanha o atingimento do perfil Líder para multiplicar sua remuneração:</p>
+                      <ul className="text-[11px] font-black text-gray-700 space-y-1 bg-white p-3 rounded-2xl border border-gray-100 italic">
+                        <li className="flex justify-between"><span>1 Desafio atingido</span> <span className="text-ferrari">2x</span></li>
+                        <li className="flex justify-between"><span>2 Desafios atingidos</span> <span className="text-ferrari">3x</span></li>
+                        <li className="flex justify-between"><span>3 Desafios atingidos</span> <span className="text-ferrari">4x</span></li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -664,7 +797,7 @@ function ProductionForm({ products, user, onRefresh, editingData }: { products: 
         <div className="bg-slate-100 p-3 rounded-2xl flex justify-between items-center text-xs">
           <div>
             <p className="text-slate-500 font-bold uppercase text-[9px]">Faturamento estimado</p>
-            <p className="text-slate-800 font-black">R$ {(parseFloat(amount || '0') * selectedProduct.multiplier).toLocaleString()}</p>
+            <p className="text-slate-800 font-black">R$ {(parseFloat(amount || '0') * selectedProduct.multiplier).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
           <ArrowUpRight className="text-green-600 w-5 h-5" />
         </div>

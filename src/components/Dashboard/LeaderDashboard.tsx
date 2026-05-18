@@ -9,6 +9,7 @@ import IndicatorManager from './IndicatorManager';
 
 export default function LeaderDashboard({ user, onLogout }: { user: User, onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState('home');
+  const [remTab, setRemTab] = useState<'total' | 'mult'>('total');
   const [viewSubTab, setViewSubTab] = useState<'month' | 'day'>('month');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [selectedDay, setSelectedDay] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -182,7 +183,33 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
   };
 
   const totalFat = Object.values(stats).reduce((a: any, b: any) => a + b.faturamento, 0) as number;
-  const totalRem = Object.values(stats).reduce((a: any, b: any) => a + b.remuneração, 0) as number;
+  
+  // Calculate Block Multiplier Logic (Global Store Performance)
+  const challenges = Object.keys(stats).map(k => {
+    const s = stats[k];
+    const blockMeta = s.meta || 0;
+    const focusMeta = s.meta_foco || 0;
+    const blockFat = s.faturamento || 0;
+    const focusFat = s.faturamento_foco || 0;
+
+    const blockAchieved = blockMeta > 0 ? (blockFat >= blockMeta) : false;
+    const focusAchieved = focusMeta > 0 ? (focusFat >= focusMeta) : true;
+
+    return {
+      name: k,
+      achieved: blockAchieved && focusAchieved,
+      blockMeta,
+      focusMeta,
+      blockFat,
+      focusFat
+    };
+  });
+
+  const achievedCount = challenges.filter(c => c.achieved).length;
+  const blockMultiplier = achievedCount === 3 ? 4 : achievedCount === 2 ? 3 : achievedCount === 1 ? 2 : 1;
+
+  const totalRemBase = Object.values(stats).reduce((a: any, b: any) => a + b.remuneração, 0) as number;
+  const totalRem = totalRemBase * blockMultiplier;
 
   const months = Array.from({ length: 24 }, (_, i) => {
     const d = new Date();
@@ -263,7 +290,7 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
                   </div>
                   <TrendingUp className="w-5 h-5 text-red-600" />
                 </div>
-                <h2 className="text-3xl font-black text-slate-800 italic">R$ {totalFat.toLocaleString('pt-BR')}</h2>
+                <h2 className="text-3xl font-black text-slate-800 italic">R$ {totalFat.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
                 
                 {/* Atingimento Total */}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
@@ -326,7 +353,7 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
                           <div className="flex justify-between items-end">
                             <span className="text-[9px] font-bold text-orange-400 uppercase">{k}</span>
                             <div className="text-right">
-                              <span className="text-[10px] font-black text-slate-800">R$ {focusFat.toLocaleString('pt-BR')}</span>
+                              <span className="text-[10px] font-black text-slate-800">R$ {focusFat.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                               {focusGoal > 0 && (
                                 <span className={cn(
                                   "ml-2 text-[10px] font-black",
@@ -363,7 +390,7 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
                         <div className="flex justify-between items-end">
                           <div>
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight block">{k}</span>
-                            <span className="font-black text-slate-800 text-sm">R$ {achieved.toLocaleString('pt-BR')}</span>
+                            <span className="font-black text-slate-800 text-sm">R$ {achieved.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
                           <div className="text-right">
                             <span className={cn(
@@ -372,7 +399,7 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
                             )}>
                               {displayPercent}%
                             </span>
-                            <p className="text-[8px] text-slate-400 font-bold uppercase">Meta: R$ {goal.toLocaleString('pt-BR')}</p>
+                            <p className="text-[8px] text-slate-400 font-bold uppercase">Meta: R$ {goal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                           </div>
                         </div>
                         <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
@@ -425,12 +452,100 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
             )}
 
             {activeTab === 'rem' && (
-              <div className="bg-white p-4 rounded-3xl border shadow-sm">
-                 <h3 className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-widest">Remuneração Variável Líder</h3>
-                 <div className="bg-red-600 text-white p-6 rounded-2xl mb-4">
-                    <p className="text-xs opacity-80 uppercase font-bold">Total a receber</p>
-                    <h2 className="text-3xl font-black italic">R$ {totalRem.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h2>
+              <div className="space-y-4">
+                 <div className="flex bg-white rounded-2xl p-1 border border-slate-100 shadow-sm">
+                    <button 
+                      onClick={() => setRemTab('total')}
+                      className={cn(
+                        "flex-1 py-3 text-[10px] font-black rounded-xl transition-all",
+                        remTab === 'total' ? "bg-red-600 text-white shadow-lg" : "text-slate-400"
+                      )}
+                    >
+                      REMUNERAÇÃO
+                    </button>
+                    <button 
+                      onClick={() => setRemTab('mult')}
+                      className={cn(
+                        "flex-1 py-3 text-[10px] font-black rounded-xl transition-all",
+                        remTab === 'mult' ? "bg-red-600 text-white shadow-lg" : "text-slate-400"
+                      )}
+                    >
+                      MULTIPLICADORES
+                    </button>
                  </div>
+
+                 {remTab === 'total' ? (
+                   <div className="bg-white p-4 rounded-3xl border shadow-sm animate-in fade-in duration-500">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-widest">Remuneração Variável Líder</h3>
+                    <div className="bg-red-600 text-white p-6 rounded-2xl mb-4 relative overflow-hidden">
+                       <div className="relative z-10">
+                        <p className="text-xs opacity-80 uppercase font-bold">Total a receber {blockMultiplier > 1 && `(${blockMultiplier}x)`}</p>
+                        <h2 className="text-3xl font-black italic">R$ {totalRem.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
+                        {blockMultiplier > 1 && (
+                          <p className="text-[10px] font-bold opacity-70 mt-1">
+                            Base: R$ {totalRemBase.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} x {blockMultiplier}
+                          </p>
+                        )}
+                       </div>
+                       <Wallet className="w-16 h-16 opacity-20 absolute -right-4 -bottom-4 z-0" />
+                    </div>
+                   </div>
+                 ) : (
+                   <div className="space-y-4 animate-in fade-in duration-500">
+                    <div className="bg-white p-6 rounded-3xl border shadow-sm space-y-4 text-center">
+                      <div className="flex justify-center items-center space-x-2">
+                        <Star className={cn("w-6 h-6", achievedCount > 0 ? "text-yellow-400 fill-yellow-400" : "text-slate-200")} />
+                        <h2 className="text-4xl font-black italic text-slate-800">{blockMultiplier}x</h2>
+                        <Star className={cn("w-6 h-6", achievedCount > 1 ? "text-yellow-400 fill-yellow-400" : "text-slate-200")} />
+                      </div>
+                      <p className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                        LOJA ATINGIU {achievedCount} {achievedCount === 1 ? 'DESAFIO' : 'DESAFIOS'}
+                      </p>
+                      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden flex">
+                        <div className={cn("h-full transition-all duration-1000", achievedCount >= 1 ? "bg-green-500" : "bg-slate-200")} style={{ width: '33.33%' }} />
+                        <div className={cn("h-full transition-all duration-1000 border-l border-white", achievedCount >= 2 ? "bg-green-500" : "bg-slate-200")} style={{ width: '33.33%' }} />
+                        <div className={cn("h-full transition-all duration-1000 border-l border-white", achievedCount >= 3 ? "bg-green-500" : "bg-slate-200")} style={{ width: '33.34%' }} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-1">Desafios da Loja</h4>
+                      {challenges.map(c => (
+                        <div key={c.name} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className={cn("w-3 h-3 rounded-full shadow-sm", c.achieved ? "bg-green-500" : "bg-red-500")} />
+                            <div>
+                              <h4 className="font-black text-sm text-slate-800 uppercase tracking-tight">{c.name}</h4>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase leading-none">
+                                {c.focusMeta > 0 ? 'Meta Bloco + Meta Foco' : 'Meta do Bloco'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                             <p className="text-[10px] font-black text-slate-700 italic">
+                               {Math.round(c.blockMeta > 0 ? (c.blockFat / c.blockMeta) * 100 : 0)}% Bloco
+                             </p>
+                             {c.focusMeta > 0 && (
+                               <p className="text-[10px] font-black text-slate-700 italic">
+                                 {Math.round(c.focusFat / c.focusMeta * 100)}% Foco
+                               </p>
+                             )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-300">
+                      <h5 className="text-[9px] font-black text-slate-400 uppercase mb-2">Regras de Multiplicação (Líder)</h5>
+                      <p className="text-[10px] font-bold text-slate-600 mb-2">A loja precisa atingir o desafio em cada bloco:</p>
+                      <ul className="text-[10px] font-bold text-slate-600 space-y-1">
+                        <li className="flex justify-between"><span>1 Desafio atingido</span> <span className="text-red-600 font-black">2x</span></li>
+                        <li className="flex justify-between"><span>2 Desafios atingidos</span> <span className="text-red-600 font-black">3x</span></li>
+                        <li className="flex justify-between"><span>3 Desafios atingidos</span> <span className="text-red-600 font-black">4x</span></li>
+                      </ul>
+                    </div>
+                   </div>
+                 )}
               </div>
             )}
 
@@ -527,19 +642,43 @@ function TeamPerformanceView({
     // Calculate Member Stats
     let fat = 0;
     let rem = 0;
-    data?.forEach(p => {
-      const pFat = p.amount * (p.product?.multiplier || 0);
-      fat += pFat;
+
+    // If it's a Specialist or Leader, they see the global store faturamento
+    if (memberProfile === 'Líder' || memberProfile === 'Especialista de loja') {
+      // In this case, 'fat' should be the store's global faturamento for the period
+      // We already have 'storeTotalDay' for the day tab, but for the month we need the sum of all team productions
       
-      let rate = 0;
-      if (memberProfile === 'Líder') {
-        rate = parseFloat((p.product?.leader_rate ?? p.product?.variable_rate ?? 0).toString());
-      } else {
-        rate = parseFloat((p.product?.specialist_rate ?? p.product?.variable_rate ?? 0).toString());
-      }
+      // Get all store productions for this period
+      const memberIds = [user.id, ...specialists.map((s: any) => s.id)];
+      const { data: globalData } = await supabase.from('productions').select('*, product:products(*)').in('user_id', memberIds).gte('date', subTab === 'month' ? `${selectedMonth}-01` : selectedDay).lte('date', subTab === 'month' ? `${selectedMonth}-31` : selectedDay);
       
-      rem += (pFat * (rate / 100)) * currentNpsMultiplier;
-    });
+      globalData?.forEach(p => {
+        const pFat = p.amount * (p.product?.multiplier || 0);
+        fat += pFat;
+        
+        let rate = 0;
+        const leaderRate = parseFloat((p.product?.leader_rate ?? p.product?.variable_rate ?? 0).toString());
+        
+        if (memberProfile === 'Líder') {
+          rate = leaderRate;
+        } else if (memberProfile === 'Especialista de loja') {
+          rate = leaderRate * 0.5;
+        } else {
+          rate = parseFloat((p.product?.specialist_rate ?? p.product?.variable_rate ?? 0).toString());
+        }
+        
+        rem += (pFat * (rate / 100)) * currentNpsMultiplier;
+      });
+    } else {
+      // Personal productions for other profiles
+      data?.forEach(p => {
+        const pFat = p.amount * (p.product?.multiplier || 0);
+        fat += pFat;
+        const rate = parseFloat((p.product?.specialist_rate ?? p.product?.variable_rate ?? 0).toString());
+        rem += (pFat * (rate / 100)) * currentNpsMultiplier;
+      });
+    }
+
     setMemberStats({ faturamento: fat, remuneração: rem });
   }
 
@@ -581,7 +720,7 @@ function TeamPerformanceView({
 
           <div className="bg-slate-800 p-6 rounded-3xl shadow-xl text-white">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Faturamento da Loja (Dia)</h3>
-            <p className="text-3xl font-black italic">R$ {storeTotalDay.toLocaleString('pt-BR')}</p>
+            <p className="text-3xl font-black italic">R$ {storeTotalDay.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
         </div>
       )}
@@ -609,11 +748,11 @@ function TeamPerformanceView({
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
               <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Faturamento</p>
-              <p className="text-lg font-black text-slate-800 italic">R$ {memberStats.faturamento.toLocaleString('pt-BR')}</p>
+              <p className="text-lg font-black text-slate-800 italic">R$ {memberStats.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
             <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
               <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Remuneração</p>
-              <p className="text-lg font-black text-green-600 italic">R$ {memberStats.remuneração.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              <p className="text-lg font-black text-green-600 italic">R$ {memberStats.remuneração.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
           </div>
 
@@ -637,8 +776,8 @@ function TeamPerformanceView({
                   </div>
                   <div className="flex items-center space-x-2">
                     <div className="text-right">
-                       <p className="font-black italic text-slate-900">R$ {p.amount.toLocaleString()}</p>
-                       <p className="text-[8px] text-slate-400 font-bold">Fat: R$ {(p.amount * (p.product?.multiplier || 0)).toLocaleString()}</p>
+                       <p className="font-black italic text-slate-900">R$ {p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                       <p className="text-[8px] text-slate-400 font-bold">Fat: R$ {(p.amount * (p.product?.multiplier || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
                     <div className="flex space-x-1 ml-2">
                        <button onClick={() => onEditProduction(p)} className="p-1.5 text-slate-300 hover:text-blue-500"><Edit className="w-3.5 h-3.5" /></button>
@@ -822,7 +961,7 @@ function ProductionForm({ products, user, onRefresh, editingData }: { products: 
         <div className="bg-slate-100 p-4 rounded-2xl flex justify-between items-center">
           <div>
             <p className="text-[9px] font-black text-slate-400 uppercase">Faturamento estimado</p>
-            <p className="text-slate-800 font-black italic text-lg">R$ {(parseFloat(amount || '0') * selectedProduct.multiplier).toLocaleString()}</p>
+            <p className="text-slate-800 font-black italic text-lg">R$ {(parseFloat(amount || '0') * selectedProduct.multiplier).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
           <ArrowUpRight className="text-green-600 w-6 h-6" />
         </div>

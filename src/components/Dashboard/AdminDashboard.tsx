@@ -255,7 +255,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                         <p className="text-[10px] text-slate-500 uppercase">{p.product?.block} • {format(new Date(p.date), 'dd/MM/yyyy')}</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-black">{p.product?.block === 'Conquista' ? `${p.amount} un.` : `R$ ${p.amount.toLocaleString()}`}</p>
+                        <p className="font-black">{p.product?.block === 'Conquista' ? `${p.amount} un.` : `R$ ${p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</p>
                         <p className="text-[9px] text-slate-400">ID: {p.id.substring(0,8)}</p>
                       </div>
                     </div>
@@ -826,7 +826,7 @@ function GoalManager({ goals, onRefresh, focusMode = false }: { goals: Goal[], o
                 )}
               </div>
               <p className="text-[10px] text-slate-400 font-bold uppercase">{g.block}</p>
-              <p className="font-black text-red-600 mt-0.5">R$ {g.value.toLocaleString()}</p>
+              <p className="font-black text-red-600 mt-0.5">R$ {g.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
             <div className="flex space-x-1">
               <button 

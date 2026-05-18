@@ -148,7 +148,7 @@ export default function IndicatorManager() {
         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Valor Atual do NPS</h3>
         <div className="relative mb-6">
           <div className="text-6xl font-black italic text-red-600 tracking-tighter">
-            {npsValue}
+            {npsValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="absolute -top-2 -right-6 bg-red-100 text-red-600 text-[10px] font-black px-2 py-1 rounded-full border border-red-200">
             PONTOS
@@ -204,7 +204,7 @@ export default function IndicatorManager() {
                   </div>
                   <h4 className="font-bold text-slate-700 text-sm">{rule.description}</h4>
                   <p className="text-[9px] font-bold text-slate-400 uppercase">
-                    Mín: {rule.min_value} | Máx: {rule.max_value}
+                    Mín: {rule.min_value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | Máx: {rule.max_value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
