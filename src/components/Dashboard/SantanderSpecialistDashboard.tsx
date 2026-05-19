@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
 import { User, Product, Production, Goal, Reminder } from '@/src/types';
 import { LogOut, Plus, Search, TrendingUp, Wallet, Bell, Check, Star, Edit, Trash2 } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import { cn, isCurrencyProduct } from '@/src/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -14,6 +14,7 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
   const [goals, setGoals] = useState<Goal[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [isRemindersOpen, setIsRemindersOpen] = useState(false);
   const [editingProduction, setEditingProduction] = useState<(Production & { product: Product }) | null>(null);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<any>({
@@ -194,7 +195,14 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
                 [{(user as any).store?.code || (user as any).stores?.code}] {(user as any).store?.name || (user as any).stores?.name}
               </p>
             )}
-            {reminders.length > 0 && <Bell className="absolute -top-1 -right-4 w-3 h-3 text-yellow-300 animate-bounce" />}
+            {reminders.length > 0 && (
+              <button 
+                onClick={() => setIsRemindersOpen(true)}
+                className="absolute -top-2 -right-10 w-11 h-11 cursor-pointer flex items-center justify-center bg-ferrari rounded-full border-2 border-white shadow-2xl z-50 overflow-visible hover:scale-110 transition-transform active:scale-95"
+              >
+                <Bell className="w-7 h-7 animate-flash-yellow" />
+              </button>
+            )}
           </div>
         </div>
         <button onClick={onLogout}><LogOut className="w-5 h-5 opacity-80" /></button>
@@ -275,12 +283,6 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
                     })}
                   </div>
                 </div>
-                {reminders.map(r => (
-                  <div key={r.id} className="bg-red-50 p-3 rounded-2xl flex items-center space-x-3 border border-red-100">
-                    <Bell className="w-4 h-4 text-red-500" /><p className="flex-1 text-sm font-medium">{r.message}</p>
-                    <button onClick={async () => { await supabase.from('reminders').update({ read: true }).eq('id', r.id); fetchData(); }}><Check className="w-4 h-4 text-red-500" /></button>
-                  </div>
-                ))}
               </>
             )}
 
@@ -311,7 +313,9 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
                     </div>
                     <div className="flex items-center space-x-2">
                       <p className="font-black text-sm mr-2">
-                        {p.product?.block === 'Conquista' ? `${p.amount} un.` : `R$ ${p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        {isCurrencyProduct(p.product?.name, p.product?.block, p.product?.segment) 
+                          ? `R$ ${p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+                          : `${p.amount} un.`}
                       </p>
                       <button 
                         onClick={() => {
@@ -438,6 +442,66 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
           </div>
         )}
       </main>
+
+      {/* Reminders Modal */}
+      {isRemindersOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="bg-ferrari p-6 text-white flex justify-between items-center">
+              <div className="flex items-center space-x-2">
+                <Bell className="w-5 h-5" />
+                <h3 className="font-black uppercase tracking-tighter">Avisos do Líder</h3>
+              </div>
+              <button 
+                onClick={() => setIsRemindersOpen(false)}
+                className="text-white/60 hover:text-white transition-colors"
+              >
+                <Plus className="w-6 h-6 rotate-45" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar">
+              {reminders.length === 0 ? (
+                <div className="text-center py-10">
+                  <p className="text-slate-400 font-bold italic">Nenhum aviso pendente</p>
+                </div>
+              ) : (
+                reminders.map(r => (
+                  <div key={r.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                    <p className="text-sm font-bold text-slate-800 leading-tight">"{r.message}"</p>
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                      <span className="text-[9px] font-black text-slate-400 uppercase">
+                        Recebido em {format(new Date(r.created_at || ''), 'dd/MM/yyyy')}
+                      </span>
+                      <button 
+                        onClick={async () => {
+                          const { error } = await supabase.from('reminders').delete().eq('id', r.id);
+                          if (!error) {
+                            setReminders(prev => prev.filter(item => item.id !== r.id));
+                            if (reminders.length === 1) setIsRemindersOpen(false);
+                          }
+                        }}
+                        className="text-[10px] font-black text-ferrari hover:bg-ferrari/5 px-2 py-1 rounded-lg transition-colors uppercase"
+                      >
+                        MARCAR COMO LIDO
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t flex justify-center">
+              <button 
+                onClick={() => setIsRemindersOpen(false)}
+                className="text-[11px] font-black text-slate-400 hover:text-ferrari uppercase tracking-widest"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -533,6 +597,9 @@ function ProductionForm({ products, user, onRefresh, editingData }: any) {
     .map((p: any) => p.segment)
   )).sort();
 
+  const selectedProduct = products.find(p => p.id === pId);
+  const showAsCurrency = isCurrencyProduct(selectedProduct?.name, block, segment);
+
   return (
     <form onSubmit={submit} className="bg-white p-4 rounded-3xl border space-y-4 shadow-sm">
       <div className="flex justify-between items-center">
@@ -607,13 +674,13 @@ function ProductionForm({ products, user, onRefresh, editingData }: any) {
 
       <div className="space-y-1">
         <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">
-          {block === 'Conquista' ? 'Quantidade (Unidades)' : 'Valor'}
+          {showAsCurrency ? 'Valor' : 'Quantidade (Unidades)'}
         </label>
         <input 
           type="number" 
-          step={block === 'Conquista' ? "1" : "0.01"} 
+          step={showAsCurrency ? "0.01" : "1"} 
           className="w-full p-2 bg-slate-50 border rounded-xl text-sm font-black" 
-          placeholder={block === 'Conquista' ? "0" : "0,00"} 
+          placeholder={showAsCurrency ? "0,00" : "0"} 
           value={amt} 
           onChange={e => setAmt(e.target.value)} 
           required 

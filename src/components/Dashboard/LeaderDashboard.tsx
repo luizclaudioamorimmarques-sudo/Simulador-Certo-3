@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
 import { User, Product, Production, Goal, Reminder, UserProfile } from '@/src/types';
-import { LogOut, Send, Search, TrendingUp, Wallet, Users, Trash2, Check, Plus, Calendar, Package, ArrowUpRight, Star, Edit, BarChart3 } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import { LogOut, Send, Search, TrendingUp, Wallet, Users, Trash2, Check, Plus, Calendar, Package, ArrowUpRight, Star, Edit, BarChart3, Clock, RefreshCcw, Bell } from 'lucide-react';
+import { cn, isCurrencyProduct } from '@/src/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import IndicatorManager from './IndicatorManager';
@@ -25,6 +25,23 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
   });
 
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [isRemindersOpen, setIsRemindersOpen] = useState(false);
+
+  useEffect(() => {
+    fetchReminders();
+    const interval = setInterval(fetchReminders, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  async function fetchReminders() {
+    const { data } = await supabase
+      .from('reminders')
+      .select('*')
+      .eq('to_user_id', user.id)
+      .eq('read', false);
+    if (data) setReminders(data);
+  }
 
   useEffect(() => {
     if (confirmingId) {
@@ -234,7 +251,20 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
              )}
           </div>
         </div>
-        <button onClick={onLogout}><LogOut className="w-5 h-5" /></button>
+        <div className="flex items-center space-x-4">
+          <div className="relative">
+            <button 
+              onClick={() => setIsRemindersOpen(true)}
+              className="p-1 hover:bg-white/10 rounded-full transition-colors relative"
+            >
+              <Bell className={cn("w-5 h-5", reminders.length > 0 ? "animate-flash-yellow" : "text-white")} />
+              {reminders.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full border border-ferrari shadow-sm"></span>
+              )}
+            </button>
+          </div>
+          <button onClick={onLogout}><LogOut className="w-5 h-5" /></button>
+        </div>
       </header>
 
       <div className="flex flex-wrap justify-center bg-white border-b shadow-sm">
@@ -559,6 +589,64 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
           </div>
         )}
       </main>
+
+      {/* Notifications Modal for Leader */}
+      {isRemindersOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full max-w-md rounded-t-[32px] sm:rounded-[32px] shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+            <div className="p-6 bg-ferrari text-white flex justify-between items-center bg-gradient-to-br from-red-600 to-red-800">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
+                  <Bell className="w-6 h-6 animate-flash-yellow" />
+                </div>
+                <div>
+                  <h3 className="font-black italic uppercase tracking-tighter text-lg">Avisos Recebidos</h3>
+                  <p className="text-[10px] uppercase font-bold opacity-70">Novas mensagens para você</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsRemindersOpen(false)}
+                className="w-10 h-10 flex items-center justify-center bg-white/20 hover:bg-white/30 rounded-full transition-all"
+              >
+                <Plus className="w-6 h-6 rotate-45" />
+              </button>
+            </div>
+            
+            <div className="p-6 max-h-[60vh] overflow-y-auto space-y-4 bg-slate-50">
+              {reminders.length === 0 ? (
+                <div className="text-center py-12 space-y-3">
+                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto">
+                    <Check className="w-8 h-8 text-slate-300" />
+                  </div>
+                  <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Tudo em dia!</p>
+                </div>
+              ) : (
+                reminders.map(r => (
+                  <div key={r.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                    <p className="text-sm font-medium text-slate-700 leading-relaxed italic">"{r.message}"</p>
+                    <div className="flex justify-between items-center pt-4 border-t border-slate-50">
+                      <span className="text-[10px] font-black text-slate-400 uppercase">
+                        {format(new Date(r.created_at || ''), 'dd/MM/yyyy HH:mm')}
+                      </span>
+                      <button 
+                        onClick={async () => {
+                          await supabase.from('reminders').delete().eq('id', r.id);
+                          setReminders(prev => prev.filter(item => item.id !== r.id));
+                          if (reminders.length === 1) setIsRemindersOpen(false);
+                        }}
+                        className="flex items-center space-x-2 px-4 py-2 bg-green-50 text-green-600 rounded-xl text-[10px] font-black uppercase hover:bg-green-100 transition-colors"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Marcar como lida</span>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -776,7 +864,11 @@ function TeamPerformanceView({
                   </div>
                   <div className="flex items-center space-x-2">
                     <div className="text-right">
-                       <p className="font-black italic text-slate-900">R$ {p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                       <p className="font-black italic text-slate-900">
+                         {isCurrencyProduct(p.product?.name, p.product?.block, p.product?.segment) 
+                           ? `R$ ${p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+                           : `${p.amount} un.`}
+                       </p>
                        <p className="text-[8px] text-slate-400 font-bold">Fat: R$ {(p.amount * (p.product?.multiplier || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
                     <div className="flex space-x-1 ml-2">
@@ -804,24 +896,58 @@ function ReminderForm({ specialists, user }: any) {
 
   const send = async () => {
     if (!to || !msg) return;
-    await supabase.from('reminders').insert([{ from_user_id: user.id, to_user_id: to, message: msg }]);
-    setMsg('');
-    setSent(true);
-    setTimeout(() => setSent(false), 3000);
+    try {
+      if (to === 'all') {
+        const batch = team.map((s: any) => ({
+          from_user_id: user.id,
+          to_user_id: s.id,
+          message: msg
+        }));
+        
+        const { error } = await supabase.from('reminders').insert(batch);
+        if (error) {
+          alert('Erro ao enviar avisos em massa: ' + error.message);
+          return;
+        }
+      } else {
+        const { error } = await supabase.from('reminders').insert([{ 
+          from_user_id: user.id, 
+          to_user_id: to, 
+          message: msg 
+        }]);
+        
+        if (error) {
+          alert('Erro ao enviar aviso: ' + error.message);
+          return;
+        }
+      }
+
+      setMsg('');
+      setSent(true);
+      setTimeout(() => setSent(false), 3000);
+      alert('Aviso enviado com sucesso!');
+    } catch (err: any) {
+      alert('Erro fatal ao enviar: ' + err.message);
+    }
   };
 
   return (
-    <div className="bg-white p-6 rounded-[32px] border border-slate-100 space-y-4 shadow-sm">
-      <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Enviar Lembrete</h3>
-      <select className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold shadow-inner" value={to} onChange={e => setTo(e.target.value)}>
-        <option value="">Selecione o destinatário...</option>
-        {team.map((s: any) => <option key={s.id} value={s.id}>{s.name} ({s.profile})</option>)}
-      </select>
-      <textarea className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium shadow-inner" rows={4} placeholder="Digite a mensagem para o especialista..." value={msg} onChange={e => setMsg(e.target.value)} />
-      <button onClick={send} className="w-full py-4 bg-red-600 text-white font-black rounded-2xl shadow-lg flex items-center justify-center space-x-2 border-b-4 border-red-800 active:scale-95 transition-all">
-        {sent ? <Check className="w-5 h-5" /> : <Send className="w-4 h-4" />}
-        <span>{sent ? "ENVIADO COM SUCESSO" : "ENVIAR AVISO"}</span>
-      </button>
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-[32px] border border-slate-100 space-y-4 shadow-sm">
+        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Enviar Aviso/Lembrete</h3>
+        <p className="text-[10px] font-bold text-slate-400 uppercase mb-4 italic">* As mensagens são apagadas automaticamente após a leitura pelo especialista.</p>
+        
+        <select className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold shadow-inner" value={to} onChange={e => setTo(e.target.value)}>
+          <option value="">Selecione o destinatário...</option>
+          <option value="all" className="text-red-600 font-black">📢 ENVIAR PARA TODOS (LOJA)</option>
+          {team.map((s: any) => <option key={s.id} value={s.id}>{s.name} ({s.profile})</option>)}
+        </select>
+        <textarea className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium shadow-inner" rows={4} placeholder="Digite a mensagem para o especialista..." value={msg} onChange={e => setMsg(e.target.value)} />
+        <button onClick={send} className="w-full py-4 bg-red-600 text-white font-black rounded-2xl shadow-lg flex items-center justify-center space-x-2 border-b-4 border-red-800 active:scale-95 transition-all">
+          {sent ? <Check className="w-5 h-5" /> : <Send className="w-4 h-4" />}
+          <span>{sent ? "ENVIADO COM SUCESSO" : "ENVIAR AVISO"}</span>
+        </button>
+      </div>
     </div>
   );
 }
@@ -886,6 +1012,7 @@ function ProductionForm({ products, user, onRefresh, editingData }: { products: 
   };
 
   const selectedProduct = products.find(p => p.id === productId);
+  const showAsCurrency = isCurrencyProduct(selectedProduct?.name, block, segment);
   const filteredProducts = products.filter(p => {
     if (!block) return false;
     if (p.block !== block) return false;
@@ -950,10 +1077,20 @@ function ProductionForm({ products, user, onRefresh, editingData }: { products: 
       </div>
 
       <div className="space-y-1">
-        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">{block === 'Conquista' ? 'Quantidade' : 'Valor'}</label>
+        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">
+          {showAsCurrency ? 'Valor' : 'Quantidade (Unidades)'}
+        </label>
         <div className="relative">
           <TrendingUp className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-          <input type="number" step={block === 'Conquista' ? "1" : "0.01"} className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold shadow-inner" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+          <input 
+            type="number" 
+            step={showAsCurrency ? "0.01" : "1"} 
+            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold shadow-inner" 
+            placeholder={showAsCurrency ? "0,00" : "0"}
+            value={amount} 
+            onChange={(e) => setAmount(e.target.value)} 
+            required 
+          />
         </div>
       </div>
 

@@ -5,7 +5,7 @@ import {
   Settings, Users, Store as StoreIcon, Package, Target, LogOut, 
   Trash2, Edit, Plus, Image as ImageIcon, Save, Check, Star, TrendingUp, BarChart3
 } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import { cn, isCurrencyProduct } from '@/src/lib/utils';
 import { format } from 'date-fns';
 import IndicatorManager from './IndicatorManager';
 
@@ -255,7 +255,11 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                         <p className="text-[10px] text-slate-500 uppercase">{p.product?.block} • {format(new Date(p.date), 'dd/MM/yyyy')}</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-black">{p.product?.block === 'Conquista' ? `${p.amount} un.` : `R$ ${p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</p>
+                        <p className="font-black">
+                          {isCurrencyProduct(p.product?.name, p.product?.block, p.product?.segment) 
+                            ? `R$ ${p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+                            : `${p.amount} un.`}
+                        </p>
                         <p className="text-[9px] text-slate-400">ID: {p.id.substring(0,8)}</p>
                       </div>
                     </div>

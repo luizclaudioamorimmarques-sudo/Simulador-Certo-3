@@ -35,3 +35,12 @@
     @apply bg-white rounded-[32px] shadow-2xl border border-white/20;
   }
 }
+
+@keyframes flash-yellow {
+  0%, 100% { color: white; filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.5)); }
+  50% { color: #facc15; filter: drop-shadow(0 0 8px #facc15); }
+}
+
+.animate-flash-yellow {
+  animation: flash-yellow 1s infinite;
+}

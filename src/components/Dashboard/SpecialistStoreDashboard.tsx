@@ -5,7 +5,7 @@ import {
   LogOut, Plus, Search, Calendar, Package, ArrowUpRight, 
   TrendingUp, Wallet, Clock, Bell, Trash2, Star, Edit
 } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import { cn, isCurrencyProduct } from '@/src/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -28,6 +28,7 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
   const [goals, setGoals] = useState<Goal[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [isRemindersOpen, setIsRemindersOpen] = useState(false);
   const [editingProduction, setEditingProduction] = useState<(Production & { product: Product }) | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -238,28 +239,58 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
   });
 
   return (
-    <div className="flex flex-col h-full bg-[#f8f8f8]">
+    <div className="flex flex-col h-full bg-[#f8f8f8] mb-12">
       {/* Profile Header */}
-      <div className="p-4 flex items-center gap-3 border-b bg-white shadow-sm">
-        <div className="w-12 h-12 rounded-full border-2 border-ferrari overflow-hidden bg-gray-200 shadow-inner">
-          <div className="w-full h-full bg-gradient-to-tr from-gray-300 to-gray-100 flex items-center justify-center font-black text-gray-500 uppercase">
-            {user.name.substring(0, 2)}
+      <header className="bg-ferrari text-white p-4 flex items-center justify-between shadow-xl border-b-4 border-ferrari-dark">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-full bg-white text-ferrari flex items-center justify-center font-black italic uppercase shadow-lg">
+            {user.name[0]}
+          </div>
+          <div className="relative">
+            <h2 className="brand-title text-sm">{user.name}</h2>
+            <p className="text-[10px] opacity-70 font-bold uppercase tracking-widest leading-none">
+              {user.profile}
+            </p>
+            {((user as any).store || (user as any).stores) && (
+              <p className="text-[10px] text-white/90 font-bold mt-0.5 flex items-center">
+                [{(user as any).store?.code || (user as any).stores?.code}] {(user as any).store?.name || (user as any).stores?.name}
+              </p>
+            )}
+            {reminders.length > 0 && (
+              <button 
+                onClick={() => setIsRemindersOpen(true)}
+                className="absolute -top-2 -right-10 w-11 h-11 cursor-pointer flex items-center justify-center bg-ferrari rounded-full border-2 border-white shadow-2xl z-50 overflow-visible hover:scale-110 transition-transform active:scale-95"
+              >
+                <Bell className="w-7 h-7 animate-flash-yellow" />
+              </button>
+            )}
           </div>
         </div>
-        <div className="flex-1">
-          <p className="font-black text-sm leading-tight text-gray-800 tracking-tight">{user.name}</p>
-          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-            {user.profile}
-          </p>
-          {((user as any).store || (user as any).stores) && (
-            <p className="text-[10px] text-red-600 font-bold mt-0.5">
-              [{(user as any).store?.code || (user as any).stores?.code}] {(user as any).store?.name || (user as any).stores?.name}
-            </p>
-          )}
-        </div>
-        <button onClick={onLogout} className="p-2 text-gray-300 hover:text-ferrari transition-colors">
+        <button onClick={onLogout} className="p-2 opacity-80 hover:opacity-100 transition-opacity">
           <LogOut className="w-5 h-5" />
         </button>
+      </header>
+
+      {/* Top Navigation */}
+      <div className="flex bg-white border-b shadow-sm overflow-x-auto no-scrollbar">
+        {[
+          { id: 'home', label: 'Início', icon: TrendingUp },
+          { id: 'productions', label: 'Produzir', icon: Plus },
+          { id: 'report', label: 'História', icon: Search },
+          { id: 'variable', label: 'Ganhos', icon: Wallet },
+        ].map(tab => (
+          <button 
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as Tab)}
+            className={cn(
+              "flex-1 py-3 text-[10px] font-bold border-b-2 flex flex-col items-center transition-all",
+              activeTab === tab.id ? "text-red-600 border-red-600 bg-red-50/30" : "text-slate-400 border-transparent shadow-sm"
+            )}
+          >
+            <tab.icon className="w-4 h-4 mb-1" />
+            <span className="truncate w-full text-center px-1 uppercase">{tab.label}</span>
+          </button>
+        ))}
       </div>
 
       {/* Content */}
@@ -290,49 +321,64 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
           <div className="p-4 space-y-4">
             {activeTab === 'home' && (
               <>
-                {/* Gauge Section */}
-                <div className="bg-white p-6 rounded-[32px] text-center shadow-sm border border-gray-100 italic">
-                  <div className="relative w-40 h-40 mx-auto">
-                    <svg viewBox="0 0 36 36" className="w-full h-full">
-                      <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#eee" strokeWidth="3" />
-                      <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#D40000" strokeWidth="3" strokeDasharray={`${Math.min(atingimento, 100)}, 100`} strokeLinecap="round" className="transition-all duration-1000 ease-out" />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-3xl font-black text-gray-800">{atingimento.toFixed(0)}%</span>
-                      <span className="text-[9px] text-gray-400 font-black uppercase tracking-tighter">Produção/Mês</span>
+                {/* Summary Card */}
+                <div className="bg-white p-5 rounded-[32px] border border-slate-100 shadow-sm space-y-4">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Faturamento Global</p>
+                      <h3 className="text-2xl font-black italic">R$ {totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                    </div>
+                    <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-black">
+                      {atingimento.toFixed(1)}%
                     </div>
                   </div>
-                  <div className="mt-4 bg-gray-50 p-3 rounded-2xl flex justify-between border border-gray-100">
-                    <div className="text-center px-4">
-                      <p className="text-[10px] font-black text-gray-400 uppercase">DIAS ÚTEIS</p>
-                      <p className="text-sm font-black">{elapsedDays} / {totalDays}</p>
+                  
+                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div 
+                      className={cn(
+                        "h-full rounded-full transition-all duration-1000",
+                        atingimento >= 100 ? "bg-green-500" : atingimento >= 50 ? "bg-blue-500" : "bg-red-500"
+                      )} 
+                      style={{ width: `${Math.min(atingimento, 100)}%` }} 
+                    />
+                  </div>
+
+                  <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3 h-3" />
+                      {elapsedDays} / {totalDays} Dias Úteis
                     </div>
-                    <div className="w-[1px] bg-gray-200"></div>
-                    <div className="text-center px-4">
-                      <p className="text-[10px] font-black text-gray-400 uppercase">RESTANTE</p>
-                      <p className="text-sm font-black">{remainingDays}</p>
+                    <div className="bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+                      Restante: {remainingDays}
                     </div>
                   </div>
                 </div>
 
                 {/* Remuneration & Blocks */}
                 <div className="space-y-4">
-                  <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">REMUNERRAÇÃO VARIÁVEL TOTAL</p>
-                    <p className="text-2xl font-black text-ferrari italic">R$ {totalRemuneração.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">REMUNERAÇÃO VARIÁVEL ESTIMADA</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-2xl font-black text-ferrari italic">R$ {totalRemuneração.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      {blockMultiplier > 1 && (
+                        <span className="bg-ferrari/10 text-ferrari px-2 py-0.5 rounded-lg text-[10px] font-black">
+                          {blockMultiplier}X MULT.
+                        </span>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-1 gap-2">
-                    <div className="flex items-center justify-between bg-white p-4 rounded-xl border-l-[6px] border-blue-500 shadow-sm">
-                      <span className="text-xs font-black text-gray-600">CRÉDITOS</span>
+                    <div className="flex items-center justify-between bg-white p-4 rounded-2xl border-l-[6px] border-blue-500 shadow-sm">
+                      <span className="text-xs font-black text-slate-500 uppercase">CRÉDITOS</span>
                       <span className="text-sm font-black italic">R$ {stats.Créditos.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
-                    <div className="flex items-center justify-between bg-white p-4 rounded-xl border-l-[6px] border-green-500 shadow-sm">
-                      <span className="text-xs font-black text-gray-600">COMISSÕES</span>
+                    <div className="flex items-center justify-between bg-white p-4 rounded-2xl border-l-[6px] border-green-500 shadow-sm">
+                      <span className="text-xs font-black text-slate-500 uppercase">COMISSÕES</span>
                       <span className="text-sm font-black italic">R$ {stats.Comissões.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
-                    <div className="flex items-center justify-between bg-white p-4 rounded-xl border-l-[6px] border-orange-500 shadow-sm">
-                      <span className="text-xs font-black text-gray-600">CONQUISTA</span>
+                    <div className="flex items-center justify-between bg-white p-4 rounded-2xl border-l-[6px] border-orange-500 shadow-sm">
+                      <span className="text-xs font-black text-slate-500 uppercase">CONQUISTA</span>
                       <span className="text-sm font-black italic">R$ {stats.Conquista.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   </div>
@@ -381,29 +427,6 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
                   </div>
                 </div>
 
-                {/* Reminders */}
-                {reminders.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Lembretes do Líder</h4>
-                    {reminders.map(r => (
-                      <div key={r.id} className="bg-ferrari text-white p-4 rounded-2xl shadow-lg flex items-start space-x-3">
-                        <Bell className="w-5 h-5 opacity-50 shrink-0" />
-                        <div className="flex-1">
-                          <p className="text-sm font-bold leading-tight">{r.message}</p>
-                          <button 
-                            onClick={async () => {
-                              await supabase.from('reminders').update({ read: true }).eq('id', r.id);
-                              fetchData();
-                            }}
-                            className="text-[10px] bg-white/20 px-2 py-1 rounded mt-2 font-black uppercase hover:bg-white/30 transition-colors"
-                          >
-                            Entendido
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </>
             )}
 
@@ -438,7 +461,9 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
                     <div className="text-right flex items-center space-x-2">
                       <div className="mr-2">
                         <p className="font-black text-gray-900 leading-none">
-                          {p.product?.block === 'Conquista' ? `${p.amount} un.` : `R$ ${p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                          {isCurrencyProduct(p.product?.name, p.product?.block, p.product?.segment) 
+                            ? `R$ ${p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+                            : `${p.amount} un.`}
                         </p>
                         <p className="text-[10px] text-gray-400">Fat: R$ {(p.amount * (p.product?.multiplier || 0)).toFixed(2)}</p>
                       </div>
@@ -470,7 +495,7 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
 
             {activeTab === 'variable' && (
               <div className="space-y-4">
-                <div className="flex bg-white rounded-2xl p-1 border border-gray-100 shadow-sm">
+                <div className="flex bg-white rounded-2xl p-1 border border-slate-100 shadow-sm">
                   <button 
                     onClick={() => setRemTab('total')}
                     className={cn(
@@ -492,7 +517,7 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
                 </div>
 
                 {remTab === 'total' ? (
-                  <div className="bg-ferrari text-white p-8 rounded-[40px] shadow-2xl border-b-[8px] border-ferrari-dark flex flex-col items-center text-center animate-in fade-in duration-500 relative overflow-hidden">
+                  <div className="bg-ferrari text-white p-8 rounded-[40px] shadow-2xl border-b-8 border-ferrari-dark flex flex-col items-center text-center animate-in fade-in duration-500 relative overflow-hidden">
                     <div className="relative z-10">
                       <p className="text-[10px] font-black uppercase opacity-60 tracking-[0.2em] mb-2">Remuneração Final {blockMultiplier > 1 && `(${blockMultiplier}x)`}</p>
                       <h3 className="text-4xl font-black italic tracking-tighter">R$ {totalRemuneração.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
@@ -566,27 +591,65 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
         )}
       </main>
 
-      {/* Nav */}
-      <div className="bg-white border-t flex justify-around p-3 pb-6 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
-        {[
-          { id: 'home', label: 'INÍCIO', icon: '🏠' },
-          { id: 'report', label: 'HISTÓRIA', icon: '📊' },
-          { id: 'productions', label: 'PRODUZIR', icon: '➕' },
-          { id: 'variable', label: 'GANHOS', icon: '💰' },
-        ].map(tab => (
-          <button 
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as Tab)}
-            className={cn(
-              "flex flex-col items-center transition-all",
-              activeTab === tab.id ? "text-ferrari scale-110" : "text-gray-300 hover:text-gray-400"
-            )}
-          >
-            <span className="text-xl mb-1">{tab.icon}</span>
-            <span className="text-[8px] font-black uppercase">{tab.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* Reminders Modal */}
+      {isRemindersOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="bg-ferrari p-6 text-white flex justify-between items-center">
+              <div className="flex items-center space-x-2">
+                <Bell className="w-5 h-5" />
+                <h3 className="font-black uppercase tracking-tighter">Avisos do Líder</h3>
+              </div>
+              <button 
+                onClick={() => setIsRemindersOpen(false)}
+                className="text-white/60 hover:text-white transition-colors"
+              >
+                <Plus className="w-6 h-6 rotate-45" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar">
+              {reminders.length === 0 ? (
+                <div className="text-center py-10">
+                  <p className="text-slate-400 font-bold italic">Nenhum aviso pendente</p>
+                </div>
+              ) : (
+                reminders.map(r => (
+                  <div key={r.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                    <p className="text-sm font-bold text-slate-800 leading-tight">"{r.message}"</p>
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                      <span className="text-[9px] font-black text-slate-400 uppercase">
+                        Recebido em {format(new Date(r.created_at || ''), 'dd/MM/yyyy')}
+                      </span>
+                      <button 
+                        onClick={async () => {
+                          const { error } = await supabase.from('reminders').delete().eq('id', r.id);
+                          if (!error) {
+                            setReminders(prev => prev.filter(item => item.id !== r.id));
+                            if (reminders.length === 1) setIsRemindersOpen(false);
+                          }
+                        }}
+                        className="text-[10px] font-black text-ferrari hover:bg-ferrari/5 px-2 py-1 rounded-lg transition-colors uppercase"
+                      >
+                        MARCAR COMO LIDO
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t flex justify-center">
+              <button 
+                onClick={() => setIsRemindersOpen(false)}
+                className="text-[11px] font-black text-slate-400 hover:text-ferrari uppercase tracking-widest"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -668,6 +731,7 @@ function ProductionForm({ products, user, onRefresh, editingData }: { products: 
   };
 
   const selectedProduct = products.find(p => p.id === productId);
+  const showAsCurrency = isCurrencyProduct(selectedProduct?.name, block, segment);
   
   // Filter products based on block and segment
   const filteredProducts = products.filter(p => {
@@ -734,11 +798,11 @@ function ProductionForm({ products, user, onRefresh, editingData }: { products: 
 
       {block === 'Conquista' && (
         <div className="space-y-1 animate-in fade-in slide-in-from-top-2 duration-300">
-          <label className="text-[10px] font-bold text-orange-500 uppercase ml-1">Segmento do Cliente</label>
+          <label className="text-[10px] font-bold text-ferrari uppercase ml-1">Segmento do Cliente</label>
           <div className="relative">
-            <Search className="absolute left-3 top-3 w-4 h-4 text-orange-400" />
+            <Search className="absolute left-3 top-3 w-4 h-4 text-ferrari/50" />
             <select
-              className="w-full pl-10 pr-4 py-2 bg-orange-50 border border-orange-200 rounded-xl text-sm appearance-none font-bold text-orange-700"
+              className="w-full pl-10 pr-4 py-2 bg-red-50 border border-red-100 rounded-xl text-sm appearance-none font-bold text-ferrari"
               value={segment}
               onChange={(e) => setSegment(e.target.value)}
               required
@@ -777,14 +841,14 @@ function ProductionForm({ products, user, onRefresh, editingData }: { products: 
 
       <div className="space-y-1">
         <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">
-          {block === 'Conquista' ? 'Quantidade (Unidades)' : 'Valor da Produção'}
+          {showAsCurrency ? 'Valor da Produção' : 'Quantidade (Unidades)'}
         </label>
         <div className="relative">
           <TrendingUp className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
           <input 
             type="number"
-            step={block === 'Conquista' ? "1" : "0.01"}
-            placeholder={block === 'Conquista' ? "0" : "0,00"}
+            step={showAsCurrency ? "0.01" : "1"}
+            placeholder={showAsCurrency ? "0,00" : "0"}
             className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
