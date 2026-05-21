@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
 import { User, Product, Production, Goal, Reminder } from '@/src/types';
-import { LogOut, Plus, Search, TrendingUp, Wallet, Bell, Check, Star, Edit, Trash2 } from 'lucide-react';
+import { LogOut, Plus, Search, TrendingUp, Wallet, Bell, Check, Star, Edit, Trash2, FileText } from 'lucide-react';
 import { cn, isCurrencyProduct, getAchievementColor, getAchievementTextColor } from '@/src/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import ReportsTab from '../Reports/ReportsTab';
 
 export default function SantanderSpecialistDashboard({ user, onLogout }: { user: User, onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState('home');
@@ -209,7 +210,13 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
       </header>
 
       <div className="flex bg-white border-b overflow-x-auto no-scrollbar">
-        {[['home', 'Início', TrendingUp], ['prod', 'Produção', Plus], ['list', 'Resumo', Search], ['var', 'Ganhos', Wallet]].map(([id, label, Icon]: any) => (
+        {[
+          ['home', 'Início', TrendingUp], 
+          ['prod', 'Produção', Plus], 
+          ['list', 'Resumo', Search], 
+          ['var', 'Ganhos', Wallet],
+          ['reports', 'Relatórios', FileText]
+        ].map(([id, label, Icon]: any) => (
           <button key={id} onClick={() => setActiveTab(id)} className={cn("flex-1 py-3 text-[10px] font-bold border-b-2 flex flex-col items-center", activeTab === id ? "text-red-600 border-red-600" : "text-slate-400 border-transparent")}>
             <Icon className="w-4 h-4 mb-1" />{label}
           </button>
@@ -449,6 +456,15 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
                   </div>
                 )}
               </div>
+            )}
+
+            {activeTab === 'reports' && (
+              <ReportsTab 
+                user={user} 
+                specialists={[]} 
+                products={products} 
+                selectedMonth={selectedMonth} 
+              />
             )}
           </div>
         )}

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
 import { User, Product, Production, Goal, Reminder, UserProfile } from '@/src/types';
-import { LogOut, Send, Search, TrendingUp, Wallet, Users, Trash2, Check, Plus, Calendar, Package, ArrowUpRight, Star, Edit, BarChart3, Clock, RefreshCcw, Bell } from 'lucide-react';
+import { LogOut, Send, Search, TrendingUp, Wallet, Users, Trash2, Check, Plus, Calendar, Package, ArrowUpRight, Star, Edit, BarChart3, Clock, RefreshCcw, Bell, FileText } from 'lucide-react';
 import { cn, isCurrencyProduct, getAchievementColor, getAchievementTextColor } from '@/src/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import IndicatorManager from './IndicatorManager';
+import ReportsTab from '../Reports/ReportsTab';
 
 export default function LeaderDashboard({ user, onLogout }: { user: User, onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState('home');
@@ -274,7 +275,8 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
           ['view', 'Equipe', Search], 
           ['rem', 'Ganhos', Wallet], 
           ['msg', 'Aviso', Send],
-          ['ind', 'Indicadores', BarChart3]
+          ['ind', 'Indicadores', BarChart3],
+          ['reports', 'Relatórios', FileText]
         ].map(([id, label, Icon]: any) => (
           <button 
             key={id} 
@@ -590,6 +592,15 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
             {activeTab === 'ind' && (
               <IndicatorManager />
             )}
+
+            {activeTab === 'reports' && (
+              <ReportsTab 
+                user={user} 
+                specialists={specialists} 
+                products={products} 
+                selectedMonth={selectedMonth} 
+              />
+            )}
           </div>
         )}
       </main>
@@ -829,7 +840,7 @@ function TeamPerformanceView({
           <option value="">Selecione um membro da equipe</option>
           <option value={user.id}>{user.name} (Líder)</option>
           <hr />
-          {specialists.map((s: any) => (
+          {specialists.filter((s: any) => s.id !== user.id).map((s: any) => (
             <option key={s.id} value={s.id}>{s.name} ({s.profile})</option>
           ))}
         </select>

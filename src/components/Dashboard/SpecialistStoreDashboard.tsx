@@ -3,11 +3,12 @@ import { supabase } from '@/src/lib/supabase';
 import { User, Product, Production, Goal, Reminder } from '@/src/types';
 import { 
   LogOut, Plus, Search, Calendar, Package, ArrowUpRight, 
-  TrendingUp, Wallet, Clock, Bell, Trash2, Star, Edit
+  TrendingUp, Wallet, Clock, Bell, Trash2, Star, Edit, FileText
 } from 'lucide-react';
 import { cn, isCurrencyProduct, getAchievementColor, getAchievementTextColor } from '@/src/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import ReportsTab from '../Reports/ReportsTab';
 import { 
   getCurrentRioDate, getBusinessDaysInMonth, 
   getElapsedBusinessDays, getRemainingBusinessDays 
@@ -18,7 +19,7 @@ interface DashboardProps {
   onLogout: () => void;
 }
 
-type Tab = 'home' | 'productions' | 'report' | 'variable';
+type Tab = 'home' | 'productions' | 'report' | 'variable' | 'pdireports';
 
 export default function SpecialistStoreDashboard({ user, onLogout }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<Tab>('home');
@@ -278,6 +279,7 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
           { id: 'productions', label: 'Produzir', icon: Plus },
           { id: 'report', label: 'História', icon: Search },
           { id: 'variable', label: 'Ganhos', icon: Wallet },
+          { id: 'pdireports', label: 'Relatórios', icon: FileText },
         ].map(tab => (
           <button 
             key={tab.id}
@@ -591,6 +593,15 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
                   </div>
                 )}
               </div>
+            )}
+
+            {activeTab === 'pdireports' && (
+              <ReportsTab 
+                user={user} 
+                specialists={[]} 
+                products={products} 
+                selectedMonth={selectedMonth} 
+              />
             )}
           </div>
         )}
