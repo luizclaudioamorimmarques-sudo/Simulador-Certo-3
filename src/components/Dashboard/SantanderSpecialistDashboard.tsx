@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
 import { User, Product, Production, Goal, Reminder } from '@/src/types';
 import { LogOut, Plus, Search, TrendingUp, Wallet, Bell, Check, Star, Edit, Trash2 } from 'lucide-react';
-import { cn, isCurrencyProduct } from '@/src/lib/utils';
+import { cn, isCurrencyProduct, getAchievementColor, getAchievementTextColor } from '@/src/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -46,7 +46,7 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
 
       const [pRes, gRes, prodRes, rRes] = await Promise.all([
         supabase.from('products').select('*'),
-        supabase.from('goals').select('*').eq('profile', user.profile),
+        supabase.from('goals').select('*').eq('profile', user.profile).eq('month', selectedMonth),
         supabase.from('productions')
           .select('*, product:products(*)')
           .eq('user_id', user.id)
@@ -77,9 +77,9 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
       gRes.data?.forEach(g => { 
         if (newStats[g.block]) {
           if (g.is_focus) {
-            newStats[g.block].meta_foco = parseFloat(g.value?.toString() || '0');
+            newStats[g.block].meta_foco += parseFloat(g.value?.toString() || '0');
           } else {
-            newStats[g.block].meta = parseFloat(g.value?.toString() || '0');
+            newStats[g.block].meta += parseFloat(g.value?.toString() || '0');
           }
         }
       });
@@ -242,15 +242,26 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
                 <div className="bg-white p-4 rounded-3xl border shadow-sm space-y-4">
                   <div className="flex justify-between items-end">
                     <div><p className="text-[10px] font-bold text-slate-400 uppercase">Faturamento</p><h3 className="text-2xl font-black">R$ {totalFat.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3></div>
-                    <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-black">{atingimento.toFixed(1)}%</div>
+                    <div className={cn("px-3 py-1 rounded-full text-xs font-black", getAchievementColor(atingimento))}>
+                      {atingimento.toFixed(1)}%
+                    </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
-                    {Object.keys(stats).map(k => (
-                      <div key={k} className="bg-slate-50 p-2 rounded-xl text-center">
-                        <p className="text-[8px] font-bold text-slate-400 uppercase">{k}</p>
-                        <p className="text-[10px] font-black">R$ {stats[k].faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                      </div>
-                    ))}
+                    {Object.keys(stats).map(k => {
+                      const goal = stats[k].meta || 0;
+                      const fat = stats[k].faturamento || 0;
+                      const percent = goal > 0 ? (fat / goal) * 100 : 0;
+                      
+                      return (
+                        <div key={k} className="bg-slate-50 p-2 rounded-xl text-center">
+                          <p className="text-[8px] font-bold text-slate-400 uppercase">{k}</p>
+                          <p className="text-[10px] font-black">R$ {stats[k].faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                          <p className={cn("text-[9px] font-black mt-0.5", getAchievementTextColor(percent))}>
+                            {percent.toFixed(0)}%
+                          </p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 

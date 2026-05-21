@@ -3,10 +3,12 @@ import { supabase } from '@/src/lib/supabase';
 import { User, Store, Product, Goal, AppSettings } from '@/src/types';
 import { 
   Settings, Users, Store as StoreIcon, Package, Target, LogOut, 
-  Trash2, Edit, Plus, Image as ImageIcon, Save, Check, Star, TrendingUp, BarChart3
+  Trash2, Edit, Plus, Image as ImageIcon, Save, Check, Star, TrendingUp, BarChart3,
+  Calendar, Layers
 } from 'lucide-react';
 import { cn, isCurrencyProduct } from '@/src/lib/utils';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import IndicatorManager from './IndicatorManager';
 
 interface AdminDashboardProps {
@@ -14,7 +16,7 @@ interface AdminDashboardProps {
   onLogout: () => void;
 }
 
-type Tab = 'users' | 'stores' | 'products' | 'goals' | 'goals_focus' | 'productions' | 'settings' | 'indicators';
+type Tab = 'users' | 'stores' | 'products' | 'goals' | 'productions' | 'settings' | 'indicators';
 
 export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<Tab>('users');
@@ -26,9 +28,18 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Productions Filter State
+  const [prodStore, setProdStore] = useState<string>('all');
+  const [prodMonth, setProdMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
+  const [prodBlock, setProdBlock] = useState<'All' | 'Créditos' | 'Comissões' | 'Conquista'>('All');
+
+  // Goals State
+  const [goalMonth, setGoalMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
+  const [goalSubTab, setGoalSubTab] = useState<'manage' | 'maintain'>('manage');
+
   useEffect(() => {
     fetchData();
-  }, [activeTab]);
+  }, [activeTab, prodStore, prodMonth, prodBlock, goalMonth]);
 
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
@@ -53,18 +64,46 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       } else if (activeTab === 'products') {
         const { data } = await supabase.from('products').select('*').order('block');
         if (data) setProducts(data);
-      } else if (activeTab === 'goals' || activeTab === 'goals_focus') {
-        const { data } = await supabase.from('goals').select('*');
-        if (data) setGoals(data);
+      } else if (activeTab === 'goals') {
+        const [{ data: gData }, { data: pData }] = await Promise.all([
+          supabase.from('goals')
+            .select('*')
+            .or(`month.eq.${goalMonth},month.is.null`),
+          supabase.from('products').select('*').order('block')
+        ]);
+        if (gData) setGoals(gData);
+        if (pData) setProducts(pData);
       } else if (activeTab === 'productions') {
-        const { data } = await supabase.from('productions')
-          .select('*, product:products(*), user:users(*)')
-          .order('created_at', { ascending: false })
-          .limit(100);
+        let query = supabase.from('productions')
+          .select('*, product:products!inner(*), user:users!inner(*, stores(*))')
+          .order('created_at', { ascending: false });
+
+        if (prodStore !== 'all') {
+          query = query.eq('user.store_id', prodStore);
+        }
+
+        const [year, month] = prodMonth.split('-').map(Number);
+        const startDate = `${prodMonth}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const endDate = `${prodMonth}-${lastDay}`;
+        
+        query = query.gte('date', startDate).lte('date', endDate);
+
+        if (prodBlock !== 'All') {
+          query = query.eq('product.block', prodBlock);
+        }
+
+        const { data } = await query.limit(100);
         if (data) setProductions(data);
       } else if (activeTab === 'settings') {
         const { data } = await supabase.from('settings').select('*').single();
         if (data) setSettings(data);
+      }
+      
+      // Always fetch stores for filters if they aren't loaded
+      if (stores.length === 0) {
+        const { data: storesData } = await supabase.from('stores').select('*').order('code');
+        if (storesData) setStores(storesData);
       }
     } catch (err) {
       console.error(err);
@@ -144,7 +183,6 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
           { id: 'stores', label: 'Lojas', icon: StoreIcon },
           { id: 'products', label: 'Produtos', icon: Package },
           { id: 'goals', label: 'Metas', icon: Target },
-          { id: 'goals_focus', label: 'Metas Foco', icon: Star },
           { id: 'productions', label: 'Produções', icon: TrendingUp },
           { id: 'indicators', label: 'Indicadores', icon: TrendingUp },
           { id: 'settings', label: 'Config', icon: Settings },
@@ -233,55 +271,174 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
             )}
 
             {activeTab === 'goals' && (
-              <GoalManager goals={goals.filter(g => !g.is_focus)} onRefresh={() => { fetchData(); }} focusMode={false} />
-            )}
+              <div className="space-y-4">
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-4">
+                  <div className="flex bg-slate-50 p-1 rounded-xl gap-1 border border-slate-100">
+                    <button
+                      onClick={() => setGoalSubTab('manage')}
+                      className={cn(
+                        "flex-1 py-2 text-[10px] font-black rounded-lg transition-all uppercase",
+                        goalSubTab === 'manage' ? "bg-white text-ferrari shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
+                      )}
+                    >
+                      Gerenciar Metas
+                    </button>
+                    <button
+                      onClick={() => setGoalSubTab('maintain')}
+                      className={cn(
+                        "flex-1 py-2 text-[10px] font-black rounded-lg transition-all uppercase",
+                        goalSubTab === 'maintain' ? "bg-white text-ferrari shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
+                      )}
+                    >
+                      Manter Metas
+                    </button>
+                  </div>
+                </div>
 
-            {activeTab === 'goals_focus' && (
-              <GoalManager goals={goals.filter(g => g.is_focus)} onRefresh={() => { fetchData(); }} focusMode={true} />
+                {goalSubTab === 'manage' ? (
+                  <GoalManager 
+                    goals={goals} 
+                    onRefresh={() => { fetchData(); }} 
+                    focusMode={false}
+                    currentMonth={goalMonth}
+                    onMonthChange={setGoalMonth}
+                    products={products}
+                  />
+                ) : (
+                  <MaintainGoals 
+                    currentMonth={goalMonth}
+                    onMonthChange={setGoalMonth}
+                    onRefresh={fetchData}
+                  />
+                )}
+              </div>
             )}
 
             {activeTab === 'productions' && (
-              <div className="space-y-2">
-                <h3 className="font-bold text-slate-800 mb-2">Últimos 100 Lançamentos</h3>
-                {productions.map(p => (
-                  <div key={p.id} className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 text-xs">
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="font-bold text-red-600">{p.user?.name}</span>
-                      <span className="text-slate-400">{format(new Date(p.created_at), 'dd/MM HH:mm')}</span>
-                    </div>
-                    <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg">
-                      <div>
-                        <p className="font-bold">{p.product?.name}</p>
-                        <p className="text-[10px] text-slate-500 uppercase">{p.product?.block} • {format(new Date(p.date), 'dd/MM/yyyy')}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-black">
-                          {isCurrencyProduct(p.product?.name, p.product?.block, p.product?.segment) 
-                            ? `R$ ${p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
-                            : `${p.amount} un.`}
-                        </p>
-                        <p className="text-[9px] text-slate-400">ID: {p.id.substring(0,8)}</p>
-                      </div>
-                    </div>
-                    <div className="flex justify-end mt-2 pt-2 border-t border-slate-50">
-                      <button 
-                        onClick={() => handleDeleteProduction(p.id)}
-                        disabled={loading}
-                        className={cn(
-                          "flex items-center space-x-1 px-3 py-1.5 rounded-lg transition-all font-bold text-[10px] uppercase font-black",
-                          loading ? "bg-slate-100 text-slate-400 cursor-not-allowed" : 
-                          confirmingId === p.id ? "bg-red-600 text-white animate-pulse" : "bg-red-50 text-red-600 hover:bg-red-100"
-                        )}
+              <div className="space-y-4">
+                <div className="bg-white p-5 rounded-[24px] shadow-sm border border-slate-100 space-y-4">
+                  <h3 className="font-black text-slate-800 uppercase tracking-tighter italic text-sm">Filtros de Produção</h3>
+                  
+                  {/* Store Filter */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1 flex items-center">
+                      <StoreIcon className="w-3 h-3 mr-1" /> Loja
+                    </label>
+                    <select 
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold focus:border-red-600 outline-none transition-all"
+                      value={prodStore}
+                      onChange={(e) => setProdStore(e.target.value)}
+                    >
+                      <option value="all">Todas as Lojas</option>
+                      {stores.map(s => <option key={s.id} value={s.id}>[{s.code}] {s.name}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Date Filter - Functional Split Selects */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1 flex items-center">
+                      <Calendar className="w-3 h-3 mr-1" /> Período de Referência
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <select 
+                        className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold focus:border-red-600 outline-none transition-all"
+                        value={prodMonth.split('-')[1]}
+                        onChange={(e) => {
+                          const year = prodMonth.split('-')[0];
+                          setProdMonth(`${year}-${e.target.value}`);
+                        }}
                       >
-                        <Trash2 className="w-4 h-4" />
-                        <span>
-                          {loading ? 'Excluindo...' : confirmingId === p.id ? 'CLIQUE PARA CONFIRMAR EXCLUSÃO' : 'Excluir Lançamento'}
-                        </span>
-                      </button>
+                        {[
+                          {v:'01', l:'Janeiro'}, {v:'02', l:'Fevereiro'}, {v:'03', l:'Março'},
+                          {v:'04', l:'Abril'}, {v:'05', l:'Maio'}, {v:'06', l:'Junho'},
+                          {v:'07', l:'Julho'}, {v:'08', l:'Agosto'}, {v:'09', l:'Setembro'},
+                          {v:'10', l:'Outubro'}, {v:'11', l:'Novembro'}, {v:'12', l:'Dezembro'}
+                        ].map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
+                      </select>
+                      <select 
+                        className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold focus:border-red-600 outline-none transition-all"
+                        value={prodMonth.split('-')[0]}
+                        onChange={(e) => {
+                          const month = prodMonth.split('-')[1];
+                          setProdMonth(`${e.target.value}-${month}`);
+                        }}
+                      >
+                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
-                ))}
-                {productions.length === 0 && <p className="text-center py-10 text-slate-400">Nenhuma produção encontrada.</p>}
+
+                  {/* Block Buttons */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1 flex items-center">
+                      <Layers className="w-3 h-3 mr-1" /> Bloco de Produção
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {['All', 'Créditos', 'Comissões', 'Conquista'].map((b) => (
+                        <button
+                          key={b}
+                          onClick={() => setProdBlock(b as any)}
+                          className={cn(
+                            "py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border",
+                            prodBlock === b 
+                              ? "bg-red-600 text-white border-red-600 shadow-md" 
+                              : "bg-white text-slate-400 border-slate-100 hover:bg-slate-50"
+                          )}
+                        >
+                          {b === 'All' ? 'Toda Prod.' : b}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="font-bold text-slate-800 mb-2 ml-2">Lançamentos ({productions.length})</h3>
+                  {productions.map(p => (
+                    <div key={p.id} className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 text-xs hover:shadow-md transition-shadow">
+                      <div className="flex justify-between items-start mb-1">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-red-600">{p.user?.name}</span>
+                          <span className="text-[10px] text-slate-400 font-medium">Loja: {p.user?.stores?.name}</span>
+                        </div>
+                        <span className="text-slate-400">{format(new Date(p.created_at), 'dd/MM HH:mm')}</span>
+                      </div>
+                      <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg mt-2">
+                        <div>
+                          <p className="font-bold">{p.product?.name}</p>
+                          <p className="text-[10px] text-slate-500 uppercase">{p.product?.block} • {format(new Date(p.date), 'dd/MM/yyyy')}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-black">
+                            {isCurrencyProduct(p.product?.name, p.product?.block, p.product?.segment) 
+                              ? `R$ ${p.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+                              : `${p.amount} un.`}
+                          </p>
+                          <p className="text-[9px] text-slate-400">ID: {p.id.substring(0,8)}</p>
+                        </div>
+                      </div>
+                      <div className="flex justify-end mt-2 pt-2 border-t border-slate-100">
+                        <button 
+                          onClick={() => handleDeleteProduction(p.id)}
+                          disabled={loading}
+                          className={cn(
+                            "flex items-center space-x-1 px-3 py-1.5 rounded-lg transition-all font-bold text-[10px] uppercase font-black",
+                            loading ? "bg-slate-100 text-slate-400 cursor-not-allowed" : 
+                            confirmingId === p.id ? "bg-red-600 text-white animate-pulse" : "bg-red-50 text-red-600 hover:bg-red-100"
+                          )}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>
+                            {loading ? 'Excluindo...' : confirmingId === p.id ? 'CLIQUE PARA CONFIRMAR' : 'Excluir'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {productions.length === 0 && <p className="text-center py-10 text-slate-400">Nenhuma produção encontrada com estes filtros.</p>}
+                </div>
               </div>
             )}
 
@@ -678,20 +835,20 @@ function ProductManager({ products, onRefresh }: { products: Product[], onRefres
   );
 }
 
-function GoalManager({ goals, onRefresh, focusMode = false }: { goals: Goal[], onRefresh: () => void | Promise<void>, focusMode?: boolean }) {
-  const [form, setForm] = useState<Partial<Goal>>({ profile: 'Especialista Santander', block: 'Créditos', value: 0, is_focus: focusMode });
+function GoalManager({ goals, onRefresh, focusMode = false, currentMonth, onMonthChange, products = [] }: { goals: Goal[], onRefresh: () => void | Promise<void>, focusMode?: boolean, currentMonth: string, onMonthChange: (m: string) => void, products: Product[] }) {
+  const [form, setForm] = useState<Partial<Goal>>({ profile: 'Especialista Santander', block: 'Créditos', value: 0, is_focus: focusMode, month: currentMonth });
   const [filterProfile, setFilterProfile] = useState<'Líder' | 'Especialista'>('Líder');
 
-  // Update form if focusMode changes
+  // Update form if focusMode or month changes
   useEffect(() => {
-    setForm(prev => ({ ...prev, is_focus: focusMode }));
-  }, [focusMode]);
+    setForm(prev => ({ ...prev, is_focus: focusMode, month: currentMonth }));
+  }, [focusMode, currentMonth]);
   const [loading, setLoading] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const handleSave = async () => {
-    if (!form.profile || !form.block) return;
+    if (!form.profile || !form.block || !form.month) return;
     setLoading(true);
     try {
       if (editingGoal) {
@@ -699,7 +856,8 @@ function GoalManager({ goals, onRefresh, focusMode = false }: { goals: Goal[], o
           value: form.value, 
           profile: form.profile, 
           block: form.block,
-          is_focus: !!form.is_focus 
+          is_focus: !!form.is_focus,
+          month: form.month
         }).eq('id', editingGoal.id);
         
         if (error) throw error;
@@ -709,6 +867,7 @@ function GoalManager({ goals, onRefresh, focusMode = false }: { goals: Goal[], o
           .eq('profile', form.profile)
           .eq('block', form.block)
           .eq('is_focus', !!form.is_focus)
+          .eq('month', form.month)
           .maybeSingle(); 
         
         if (selectError) {
@@ -728,7 +887,8 @@ function GoalManager({ goals, onRefresh, focusMode = false }: { goals: Goal[], o
             profile: form.profile,
             block: form.block,
             value: form.value,
-            is_focus: !!form.is_focus
+            is_focus: !!form.is_focus,
+            month: form.month
           }]);
           if (insertError) {
             throw insertError;
@@ -737,13 +897,13 @@ function GoalManager({ goals, onRefresh, focusMode = false }: { goals: Goal[], o
       }
       alert('Meta salva com sucesso!');
       setEditingGoal(null);
-      setForm({ profile: 'Especialista Santander', block: 'Créditos', value: 0, is_focus: focusMode });
+      setForm({ profile: 'Especialista Santander', block: 'Créditos', value: 0, is_focus: focusMode, month: currentMonth });
       await onRefresh();
     } catch (err: any) {
       console.error('Goal saving error:', err);
       // More descriptive error for constraints
       if (err.code === '23505') {
-        alert('Erro: Já existe uma meta cadastrada para este perfil e bloco. Tente editar a meta existente.');
+        alert('Erro: Já existe uma meta cadastrada para este perfil e bloco neste mês. Tente editar a meta existente.');
       } else {
         alert('Erro ao salvar meta: ' + (err.message || 'Erro desconhecido.'));
       }
@@ -785,7 +945,7 @@ function GoalManager({ goals, onRefresh, focusMode = false }: { goals: Goal[], o
             <button 
               onClick={() => {
                 setEditingGoal(null);
-                setForm({ profile: 'Especialista Santander', block: 'Créditos', value: 0, is_focus: focusMode });
+                setForm({ profile: 'Especialista Santander', block: 'Créditos', value: 0, is_focus: focusMode, month: currentMonth });
               }}
               className="text-[10px] font-bold text-red-600 uppercase"
             >
@@ -793,6 +953,40 @@ function GoalManager({ goals, onRefresh, focusMode = false }: { goals: Goal[], o
             </button>
           )}
         </div>
+
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Mês de Referência</label>
+          <div className="grid grid-cols-2 gap-2">
+            <select 
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold"
+              value={currentMonth.split('-')[1]}
+              onChange={(e) => {
+                const year = currentMonth.split('-')[0];
+                onMonthChange(`${year}-${e.target.value}`);
+              }}
+            >
+              {[
+                {v:'01', l:'Janeiro'}, {v:'02', l:'Fevereiro'}, {v:'03', l:'Março'},
+                {v:'04', l:'Abril'}, {v:'05', l:'Maio'}, {v:'06', l:'Junho'},
+                {v:'07', l:'Julho'}, {v:'08', l:'Agosto'}, {v:'09', l:'Setembro'},
+                {v:'10', l:'Outubro'}, {v:'11', l:'Novembro'}, {v:'12', l:'Dezembro'}
+              ].map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
+            </select>
+            <select 
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold"
+              value={currentMonth.split('-')[0]}
+              onChange={(e) => {
+                const month = currentMonth.split('-')[1];
+                onMonthChange(`${e.target.value}-${month}`);
+              }}
+            >
+              {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         <div className="space-y-1">
           <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Perfil</label>
           <select 
@@ -827,7 +1021,40 @@ function GoalManager({ goals, onRefresh, focusMode = false }: { goals: Goal[], o
             onChange={(e) => setForm({...form, value: e.target.value === '' ? 0 : parseFloat(e.target.value)})}
           />
         </div>
-        {/* Removed redundant focus checkbox because of tab separation */}
+
+        <div className="flex items-center space-x-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
+          <input 
+            type="checkbox" 
+            id="goal_is_focus"
+            className="w-4 h-4 text-red-600 rounded focus:ring-red-500 border-gray-300"
+            checked={form.is_focus || false}
+            onChange={(e) => setForm({...form, is_focus: e.target.checked})}
+          />
+          <label htmlFor="goal_is_focus" className="text-[10px] font-black text-slate-600 uppercase flex items-center">
+            <Star className={cn("w-3 h-3 mr-1", form.is_focus ? "fill-red-600 text-red-600" : "text-slate-400")} />
+            Meta de Produtos Foco
+          </label>
+        </div>
+
+        {form.is_focus && (
+          <div className="bg-orange-50 p-3 rounded-lg border border-orange-100 animate-in fade-in slide-in-from-top-2 duration-300">
+            <p className="text-[9px] font-black text-orange-600 uppercase mb-2">Produtos Foco {form.block}:</p>
+            <div className="flex flex-wrap gap-1">
+              {products.filter(p => p.is_focus && p.block === form.block).map(p => (
+                <span key={p.id} className="bg-white px-2 py-0.5 rounded-full text-[8px] font-bold text-orange-700 border border-orange-200 uppercase">
+                  {p.name}
+                </span>
+              ))}
+              {products.filter(p => p.is_focus && p.block === form.block).length === 0 && (
+                <p className="text-[8px] text-orange-400 font-bold italic">Nenhum produto foco cadastrado para este bloco.</p>
+              )}
+            </div>
+            <p className="text-[8px] text-orange-400 mt-2 italic leading-tight">
+              * Esta meta será comparada com a soma da produção dos produtos foco acima.
+            </p>
+          </div>
+        )}
+
         <button 
           onClick={handleSave}
           disabled={loading}
@@ -896,6 +1123,202 @@ function GoalManager({ goals, onRefresh, focusMode = false }: { goals: Goal[], o
           </div>
         ))}
         {goals.length === 0 && <p className="text-center py-6 text-slate-400 text-xs italic">Nenhuma meta configurada.</p>}
+      </div>
+    </div>
+  );
+}
+
+function MaintainGoals({ currentMonth, onMonthChange, onRefresh }: { currentMonth: string, onMonthChange: (m: string) => void, onRefresh: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [prevGoals, setPrevGoals] = useState<Goal[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isAllSelected, setIsAllSelected] = useState(false);
+
+  const prevMonth = (() => {
+    const [y, mm] = currentMonth.split('-').map(Number);
+    const d = new Date(y, mm - 2, 1);
+    return format(d, 'yyyy-MM');
+  })();
+
+  const fetchPrevGoals = async () => {
+    setLoading(true);
+    try {
+      const { data } = await supabase.from('goals')
+        .select('*')
+        .eq('month', prevMonth);
+      if (data) setPrevGoals(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPrevGoals();
+  }, [currentMonth]);
+
+  const toggleAll = () => {
+    if (isAllSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(prevGoals.map(g => g.id));
+    }
+    setIsAllSelected(!isAllSelected);
+  };
+
+  const toggleOne = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleEfetivar = async () => {
+    if (selectedIds.length === 0) return alert('Selecione ao menos uma meta para manter.');
+    
+    setLoading(true);
+    try {
+      const goalsToCopy = prevGoals.filter(g => selectedIds.includes(g.id));
+      
+      const upserts = goalsToCopy.map(g => ({
+        profile: g.profile,
+        block: g.block,
+        value: g.value,
+        is_focus: g.is_focus,
+        month: currentMonth
+      }));
+
+      for (const item of upserts) {
+        // Find if exists in current month
+        const { data: existing } = await supabase.from('goals')
+          .select('id')
+          .eq('profile', item.profile)
+          .eq('block', item.block)
+          .eq('month', item.month)
+          .eq('is_focus', item.is_focus)
+          .maybeSingle();
+
+        if (existing) {
+          await supabase.from('goals').update({ value: item.value }).eq('id', existing.id);
+        } else {
+          await supabase.from('goals').insert([item]);
+        }
+      }
+
+      alert(`${selectedIds.length} metas transportadas para ${currentMonth} com sucesso!`);
+      onRefresh();
+    } catch (err: any) {
+      alert('Erro ao efetivar metas: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const categories = [
+    { label: 'Perfil Líder', profile: 'Líder' },
+    { label: 'Perfil Especialista de Loja', profile: 'Especialista de loja' },
+    { label: 'Perfil Especialista Santander', profile: 'Especialista Santander' }
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white p-5 rounded-[24px] shadow-sm border border-slate-100 space-y-4">
+        {/* Unified Date Selector */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase ml-1 flex items-center">
+            <Calendar className="w-3 h-3 mr-1" /> Mês de Referência
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <select 
+              className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold focus:border-red-600 outline-none transition-all"
+              value={currentMonth.split('-')[1]}
+              onChange={(e) => {
+                const year = currentMonth.split('-')[0];
+                onMonthChange(`${year}-${e.target.value}`);
+              }}
+            >
+              {[
+                {v:'01', l:'Janeiro'}, {v:'02', l:'Fevereiro'}, {v:'03', l:'Março'},
+                {v:'04', l:'Abril'}, {v:'05', l:'Maio'}, {v:'06', l:'Junho'},
+                {v:'07', l:'Julho'}, {v:'08', l:'Agosto'}, {v:'09', l:'Setembro'},
+                {v:'10', l:'Outubro'}, {v:'11', l:'Novembro'}, {v:'12', l:'Dezembro'}
+              ].map(m => <option key={m.v} value={m.v}>{m.l}</option>)}
+            </select>
+            <select 
+              className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold focus:border-red-600 outline-none transition-all"
+              value={currentMonth.split('-')[0]}
+              onChange={(e) => {
+                const month = currentMonth.split('-')[1];
+                onMonthChange(`${e.target.value}-${month}`);
+              }}
+            >
+              {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-2">
+          <button 
+            onClick={handleEfetivar}
+            disabled={loading || selectedIds.length === 0}
+            className="w-full sm:w-auto bg-blue-600 text-white px-8 py-3 rounded-xl font-black uppercase text-xs shadow-md active:scale-95 transition-all disabled:opacity-50"
+          >
+            {loading ? 'PROCESSANDO...' : 'Efetivar Metas Selecionadas'}
+          </button>
+        </div>
+
+        <div className="flex justify-between items-center px-2">
+          <p className="text-[10px] font-black text-slate-400 uppercase italic">* Metas do mês anterior ({prevMonth})</p>
+          <button onClick={toggleAll} className="text-[10px] font-black text-blue-600 uppercase">
+            {isAllSelected ? 'Desmarcar Todos' : 'Selecionar Todos'}
+          </button>
+        </div>
+
+        <div className="space-y-6">
+          {categories.map(cat => {
+            const catGoals = prevGoals.filter(g => g.profile === cat.profile);
+            if (catGoals.length === 0) return null;
+
+            return (
+              <div key={cat.profile} className="space-y-2">
+                <h4 className="text-[10px] font-black text-ferrari uppercase tracking-widest border-b border-ferrari/10 pb-1">{cat.label}</h4>
+                <div className="space-y-2">
+                  {catGoals.map(g => (
+                    <div key={g.id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-100 group">
+                      <div className="flex items-center space-x-3">
+                        <input 
+                          type="checkbox"
+                          checked={selectedIds.includes(g.id)}
+                          onChange={() => toggleOne(g.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div>
+                          <p className="text-xs font-bold text-slate-700">
+                            {g.block}
+                            {g.is_focus && <span className="ml-2 bg-orange-100 text-orange-600 px-1 py-0.5 rounded text-[7px] font-black uppercase">FOCO</span>}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">R$ {g.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        </div>
+                      </div>
+                      <span className={cn(
+                        "text-[8px] font-black px-2 py-0.5 rounded-full uppercase",
+                        selectedIds.includes(g.id) ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-400"
+                      )}>
+                        {selectedIds.includes(g.id) ? 'Selecionada' : 'Manter?'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+
+          {prevGoals.length === 0 && !loading && (
+            <p className="text-center py-10 text-slate-400 text-xs italic">Nenhuma meta encontrada no mês anterior ({prevMonth}).</p>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import {
   LogOut, Plus, Search, Calendar, Package, ArrowUpRight, 
   TrendingUp, Wallet, Clock, Bell, Trash2, Star, Edit
 } from 'lucide-react';
-import { cn, isCurrencyProduct } from '@/src/lib/utils';
+import { cn, isCurrencyProduct, getAchievementColor, getAchievementTextColor } from '@/src/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -59,8 +59,8 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
       if (pErr) throw pErr;
       if (pData) setProducts(pData);
 
-      // Use Líder goals for indicators to match store performance
-      const { data: gData, error: gErr } = await supabase.from('goals').select('*').eq('profile', 'Líder');
+      // Use Líder goals for indicators to match store performance for the selected month
+      const { data: gData, error: gErr } = await supabase.from('goals').select('*').eq('profile', 'Líder').eq('month', selectedMonth);
       if (gErr) throw gErr;
       if (gData) setGoals(gData);
 
@@ -106,9 +106,9 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
         gData?.forEach(g => {
           if (newStats[g.block as keyof typeof newStats]) {
             if (g.is_focus) {
-              newStats[g.block as keyof typeof newStats].meta_foco = g.value;
+              newStats[g.block as keyof typeof newStats].meta_foco += g.value;
             } else {
-              newStats[g.block as keyof typeof newStats].meta = g.value;
+              newStats[g.block as keyof typeof newStats].meta += g.value;
             }
           }
         });
@@ -328,7 +328,7 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Faturamento Global</p>
                       <h3 className="text-2xl font-black italic">R$ {totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
                     </div>
-                    <div className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-black">
+                    <div className={cn("px-3 py-1 rounded-full text-xs font-black", getAchievementColor(atingimento))}>
                       {atingimento.toFixed(1)}%
                     </div>
                   </div>
@@ -337,7 +337,7 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
                     <div 
                       className={cn(
                         "h-full rounded-full transition-all duration-1000",
-                        atingimento >= 100 ? "bg-green-500" : atingimento >= 50 ? "bg-blue-500" : "bg-red-500"
+                        atingimento >= 100 ? "bg-green-500" : atingimento >= 80 ? "bg-yellow-500" : "bg-red-500"
                       )} 
                       style={{ width: `${Math.min(atingimento, 100)}%` }} 
                     />
@@ -369,18 +369,23 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
                   </div>
                   
                   <div className="grid grid-cols-1 gap-2">
-                    <div className="flex items-center justify-between bg-white p-4 rounded-2xl border-l-[6px] border-blue-500 shadow-sm">
-                      <span className="text-xs font-black text-slate-500 uppercase">CRÉDITOS</span>
-                      <span className="text-sm font-black italic">R$ {stats.Créditos.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex items-center justify-between bg-white p-4 rounded-2xl border-l-[6px] border-green-500 shadow-sm">
-                      <span className="text-xs font-black text-slate-500 uppercase">COMISSÕES</span>
-                      <span className="text-sm font-black italic">R$ {stats.Comissões.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex items-center justify-between bg-white p-4 rounded-2xl border-l-[6px] border-orange-500 shadow-sm">
-                      <span className="text-xs font-black text-slate-500 uppercase">CONQUISTA</span>
-                      <span className="text-sm font-black italic">R$ {stats.Conquista.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
+                    {Object.keys(stats).map(k => {
+                      const goal = stats[k].meta || 0;
+                      const fat = stats[k].faturamento || 0;
+                      const percent = goal > 0 ? (fat / goal) * 100 : 0;
+                      
+                      return (
+                        <div key={k} className="flex items-center justify-between bg-white p-4 rounded-2xl border-l-[6px] border-slate-200 shadow-sm">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-black text-slate-500 uppercase">{k}</span>
+                            <span className={cn("text-[10px] font-black", getAchievementTextColor(percent))}>
+                              {percent.toFixed(0)}% da Meta
+                            </span>
+                          </div>
+                          <span className="text-sm font-black italic">R$ {stats[k].faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 

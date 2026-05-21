@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
 import { User, Product, Production, Goal, Reminder, UserProfile } from '@/src/types';
 import { LogOut, Send, Search, TrendingUp, Wallet, Users, Trash2, Check, Plus, Calendar, Package, ArrowUpRight, Star, Edit, BarChart3, Clock, RefreshCcw, Bell } from 'lucide-react';
-import { cn, isCurrencyProduct } from '@/src/lib/utils';
+import { cn, isCurrencyProduct, getAchievementColor, getAchievementTextColor } from '@/src/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import IndicatorManager from './IndicatorManager';
@@ -94,8 +94,8 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
         console.log("Membros da equipe identificados:", team.length);
       }
 
-      // Fetch goals for Leader profile
-      const { data: gData } = await supabase.from('goals').select('*').eq('profile', 'Líder');
+      // Fetch goals for Leader profile the selected month
+      const { data: gData } = await supabase.from('goals').select('*').eq('profile', 'Líder').eq('month', selectedMonth);
       if (gData) setGoals(gData);
 
       // Ensure leader.id is included in the production sum list
@@ -124,9 +124,9 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
       gData?.forEach(g => { 
         if (newStats[g.block]) {
           if (g.is_focus) {
-            newStats[g.block].meta_foco = parseFloat(g.value?.toString() || '0');
+            newStats[g.block].meta_foco += parseFloat(g.value?.toString() || '0');
           } else {
-            newStats[g.block].meta = parseFloat(g.value?.toString() || '0'); 
+            newStats[g.block].meta += parseFloat(g.value?.toString() || '0'); 
           }
         }
       });
@@ -327,7 +327,11 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
                   <div className="flex justify-between items-end mb-2">
                     <div>
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Atingimento Total</h4>
-                      <p className="text-lg font-black text-slate-800">
+                      <p className={cn("text-lg font-black", getAchievementTextColor((() => {
+                        const totalGoal = Object.values(stats || {}).reduce((acc: number, s: any) => acc + (s.meta || 0), 0) as number;
+                        const totalAchieved = Object.values(stats || {}).reduce((acc: number, s: any) => acc + (s.faturamento || 0), 0) as number;
+                        return totalGoal > 0 ? (totalAchieved / totalGoal) * 100 : 0;
+                      })()))}>
                         {(() => {
                           const totalGoal = Object.values(stats || {}).reduce((acc: number, s: any) => acc + (s.meta || 0), 0) as number;
                           const totalAchieved = Object.values(stats || {}).reduce((acc: number, s: any) => acc + (s.faturamento || 0), 0) as number;
@@ -354,7 +358,7 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
                         <div 
                           className={cn(
                             "h-full rounded-full transition-all duration-1000",
-                            percent >= 100 ? "bg-green-500" : percent >= 50 ? "bg-blue-500" : "bg-red-500"
+                            percent >= 100 ? "bg-green-500" : percent >= 80 ? "bg-yellow-500" : "bg-red-500"
                           )}
                           style={{ width: `${cappedPercent}%` }}
                         />
@@ -425,7 +429,7 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
                           <div className="text-right">
                             <span className={cn(
                               "text-sm font-black italic",
-                              displayPercent >= 100 ? "text-green-600" : displayPercent >= 50 ? "text-blue-600" : "text-red-600"
+                              getAchievementTextColor(displayPercent)
                             )}>
                               {displayPercent}%
                             </span>
@@ -436,7 +440,7 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
                           <div 
                             className={cn(
                               "h-full rounded-full transition-all duration-500",
-                              displayPercent >= 100 ? "bg-green-500" : displayPercent >= 50 ? "bg-blue-500" : "bg-red-500"
+                              displayPercent >= 100 ? "bg-green-500" : displayPercent >= 80 ? "bg-yellow-500" : "bg-red-500"
                             )}
                             style={{ width: `${percent}%` }}
                           />

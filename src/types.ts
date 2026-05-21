@@ -36,6 +36,7 @@ export interface Goal {
   block: BlockType;
   value: number;
   is_focus?: boolean;
+  month: string; // YYYY-MM
 }
 
 export interface Production {
