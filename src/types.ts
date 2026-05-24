@@ -16,6 +16,8 @@ export interface Store {
   id: string;
   name: string;
   code: string;
+  nps?: number;
+  nps_updated_at?: string;
 }
 
 export interface Product {

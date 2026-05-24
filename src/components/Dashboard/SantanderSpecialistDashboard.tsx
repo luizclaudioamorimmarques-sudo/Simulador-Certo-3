@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
-import { User, Product, Production, Goal, Reminder } from '@/src/types';
+import { User, Product, Production, Goal, Reminder, Store } from '@/src/types';
 import { LogOut, Plus, Search, TrendingUp, Wallet, Bell, Check, Star, Edit, Trash2, FileText } from 'lucide-react';
 import { cn, isCurrencyProduct, getAchievementColor, getAchievementTextColor } from '@/src/lib/utils';
 import { format } from 'date-fns';
@@ -86,14 +86,18 @@ export default function SantanderSpecialistDashboard({ user, onLogout }: { user:
       });
 
       // Calculate Production
-      // Fetch NPS Multiplier
-      const { data: npsData } = await supabase
-        .from('indicators')
-        .select('value')
-        .eq('name', 'NPS')
-        .eq('month', selectedMonth)
-        .maybeSingle();
-      const npsValue = npsData?.value || 0;
+      // Fetch NPS from Store instead of global indicators
+      let storeId = user.store_id;
+      if (!storeId) {
+        const uStore = (user as any).store || (user as any).stores;
+        storeId = Array.isArray(uStore) ? uStore[0]?.id : uStore?.id;
+      }
+      
+      let npsValue = 0;
+      if (storeId) {
+        const { data: storeData } = await supabase.from('stores').select('nps').eq('id', storeId).maybeSingle();
+        if (storeData) npsValue = storeData.nps || 0;
+      }
       
       const { data: rulesData } = await supabase.from('indicator_rules').select('*').eq('indicator_name', 'NPS');
       let npsMultiplier = 1;

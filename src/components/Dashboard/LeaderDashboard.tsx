@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
-import { User, Product, Production, Goal, Reminder, UserProfile } from '@/src/types';
+import { User, Product, Production, Goal, Reminder, UserProfile, Store } from '@/src/types';
 import { LogOut, Send, Search, TrendingUp, Wallet, Users, Trash2, Check, Plus, Calendar, Package, ArrowUpRight, Star, Edit, BarChart3, Clock, RefreshCcw, Bell, FileText } from 'lucide-react';
 import { cn, isCurrencyProduct, getAchievementColor, getAchievementTextColor } from '@/src/lib/utils';
 import { format } from 'date-fns';
@@ -84,8 +84,11 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
       // Fetch all users in this store
       const { data: sData, error: sError } = await supabase
         .from('users')
-        .select('*, stores(name, code)')
+        .select('*, stores(*)')
         .eq('store_id', leaderStoreId);
+      
+      const currentStore = sData?.[0]?.stores as Store | undefined;
+      const npsValue = currentStore?.nps || 0;
       
       if (sError) console.error("Erro busca membros:", sError);
 
@@ -133,15 +136,6 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
       });
       
       // Calculate Production
-      // Fetch NPS Multiplier
-      const { data: npsData } = await supabase
-        .from('indicators')
-        .select('value')
-        .eq('name', 'NPS')
-        .eq('month', selectedMonth)
-        .maybeSingle();
-      const npsValue = npsData?.value || 0;
-      
       const { data: rulesData } = await supabase.from('indicator_rules').select('*').eq('indicator_name', 'NPS');
       let npsMultiplier = 1;
       if (rulesData) {
@@ -369,6 +363,49 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
                   </div>
                 </div>
 
+                {/* NPS Management for Leader */}
+                <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 rounded-2xl bg-yellow-50 flex items-center justify-center mr-3">
+                      <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">NPS da Loja</p>
+                      <p className="font-black text-slate-800 text-lg">{(() => {
+                        // Current NPS from store
+                        const store = specialists?.[0]?.stores || (user as any).store || (user as any).stores;
+                        const n = Array.isArray(store) ? store[0]?.nps : store?.nps;
+                        return n || 0;
+                      })()}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input 
+                      type="number"
+                      className="w-20 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-center"
+                      placeholder="NPS"
+                      defaultValue={(() => {
+                        const store = specialists?.[0]?.stores || (user as any).store || (user as any).stores;
+                        const n = Array.isArray(store) ? store[0]?.nps : store?.nps;
+                        return n || 0;
+                      })()}
+                      onBlur={async (e) => {
+                        const val = parseFloat(e.target.value);
+                        const storeId = user.store_id || ((user as any).store?.id || (user as any).stores?.id);
+                        if (storeId) {
+                          setLoading(true);
+                          await supabase.from('stores').update({ 
+                            nps: val,
+                            nps_updated_at: new Date().toISOString()
+                          }).eq('id', storeId);
+                          await fetchData();
+                        }
+                      }}
+                    />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Salvar</span>
+                  </div>
+                </div>
+
                 {/* Faturamento Produtos Foco */}
                 <div className="bg-orange-50/50 p-4 rounded-2xl border border-orange-100 space-y-3">
                   <div className="flex items-center space-x-2">
@@ -590,7 +627,7 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
             )}
 
             {activeTab === 'ind' && (
-              <IndicatorManager />
+              <IndicatorManager user={user} />
             )}
 
             {activeTab === 'reports' && (

@@ -32,6 +32,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const [prodStore, setProdStore] = useState<string>('all');
   const [prodMonth, setProdMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
   const [prodBlock, setProdBlock] = useState<'All' | 'Créditos' | 'Comissões' | 'Conquista'>('All');
+  const [userFilterStore, setUserFilterStore] = useState<string>('all');
 
   // Goals State
   const [goalMonth, setGoalMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
@@ -39,7 +40,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
   useEffect(() => {
     fetchData();
-  }, [activeTab, prodStore, prodMonth, prodBlock, goalMonth]);
+  }, [activeTab, prodStore, prodMonth, prodBlock, goalMonth, userFilterStore]);
 
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
@@ -54,9 +55,15 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     setLoading(true);
     try {
       if (activeTab === 'users') {
-        const { data } = await supabase.from('users')
+        let query = supabase.from('users')
           .select('*, stores(name, code)')
           .order('name');
+        
+        if (userFilterStore !== 'all') {
+          query = query.eq('store_id', userFilterStore);
+        }
+
+        const { data } = await query;
         if (data) setUsers(data as any);
       } else if (activeTab === 'stores') {
         const { data } = await supabase.from('stores').select('*').order('code');
@@ -213,10 +220,31 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
           <div className="max-w-md mx-auto space-y-4">
             {activeTab === 'users' && (
               <div className="space-y-3">
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-col space-y-2 mb-4">
                   <h3 className="font-bold text-slate-800">Gerenciar Usuários</h3>
+                  <div className="relative">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block mb-1">Filtrar por Unidade</label>
+                    <div className="relative flex items-center">
+                      <StoreIcon className="w-4 h-4 text-slate-400 absolute left-3 z-10" />
+                      <select 
+                        className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-red-600 transition-all shadow-sm appearance-none"
+                        value={userFilterStore}
+                        onChange={(e) => setUserFilterStore(e.target.value)}
+                      >
+                        <option value="all">Todas as Unidades</option>
+                        {stores.map(s => (
+                          <option key={s.id} value={s.id}>
+                            [{s.code}] {s.name}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="absolute right-3 pointer-events-none text-slate-400">
+                        <Plus className="w-3 h-3 rotate-45" /> 
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                {users.map(u => (
+                {users.length > 0 ? users.map(u => (
                   <div key={u.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
                     <div>
                       <h4 className="font-bold text-slate-700">{u.name}</h4>
@@ -258,7 +286,14 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                       </button>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="bg-white p-10 rounded-2xl border border-slate-100 flex flex-col items-center text-center">
+                    <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                      <Users className="w-6 h-6 text-slate-300" />
+                    </div>
+                    <p className="text-slate-400 font-bold text-sm">Nenhum usuário encontrado na unidade selecionada.</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -447,7 +482,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
             )}
 
             {activeTab === 'indicators' && (
-              <IndicatorManager />
+              <IndicatorManager user={user} />
             )}
           </div>
         )}
@@ -461,6 +496,8 @@ function StoreManager({ stores, onRefresh }: { stores: Store[], onRefresh: () =>
   const [code, setCode] = useState('');
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   const handleAdd = async () => {
     if (!name || code.length !== 4) {
@@ -472,6 +509,7 @@ function StoreManager({ stores, onRefresh }: { stores: Store[], onRefresh: () =>
       await supabase.from('stores').insert([{ name, code }]);
       setName('');
       setCode('');
+      setShowAddForm(false);
       await onRefresh();
     } catch (err: any) {
       alert('Erro ao adicionar loja: ' + err.message);
@@ -488,8 +526,10 @@ function StoreManager({ stores, onRefresh }: { stores: Store[], onRefresh: () =>
     
     setLoading(true);
     try {
+      await supabase.from('users').update({ store_id: null }).eq('store_id', id);
       await supabase.from('stores').delete().eq('id', id);
       setConfirmingId(null);
+      setSelectedStoreId(null);
       await onRefresh();
     } catch (err: any) {
       alert('Erro ao excluir loja: ' + err.message);
@@ -498,59 +538,134 @@ function StoreManager({ stores, onRefresh }: { stores: Store[], onRefresh: () =>
     }
   };
 
+  const selectedStore = stores.find(s => s.id === selectedStoreId);
+
   return (
-    <div className="space-y-4">
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-        <h3 className="font-bold text-slate-800 mb-3 text-xs uppercase tracking-widest">Nova Loja</h3>
-        <div className="flex flex-col space-y-2">
-          <div className="flex space-x-2">
-            <input 
-              type="text" 
-              placeholder="0000" 
-              maxLength={4}
-              className="w-20 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono text-center"
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-            />
-            <input 
-              type="text" 
-              placeholder="Nome da loja" 
-              className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+    <div className="space-y-6">
+      {/* Search/Filter Header */}
+      <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Consultar Lojas</h3>
+          <button 
+            onClick={() => {
+              setShowAddForm(!showAddForm);
+              setSelectedStoreId(null);
+            }}
+            className="flex items-center space-x-2 text-red-600 font-black text-[10px] uppercase hover:underline"
+          >
+            <Plus className={cn("w-4 h-4 transition-transform", showAddForm && "rotate-45")} />
+            <span>{showAddForm ? 'Cancelar' : 'Incluir Loja'}</span>
+          </button>
+        </div>
+
+        {!showAddForm && (
+          <div className="relative">
+            <StoreIcon className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            <select 
+              className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:border-red-600 transition-all shadow-inner appearance-none"
+              value={selectedStoreId || ''}
+              onChange={(e) => setSelectedStoreId(e.target.value)}
+            >
+              <option value="">Selecione uma loja para consultar...</option>
+              {stores.map(s => (
+                <option key={s.id} value={s.id}>
+                  [{s.code}] {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {showAddForm && (
+          <div className="space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="grid grid-cols-4 gap-3">
+              <div className="col-span-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block mb-1">Código</label>
+                <input 
+                  type="text" 
+                  placeholder="0000" 
+                  maxLength={4}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black text-center shadow-inner"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                />
+              </div>
+              <div className="col-span-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block mb-1">Nome da Unidade</label>
+                <input 
+                  type="text" 
+                  placeholder="Nome Comercial" 
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold shadow-inner"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+            </div>
             <button 
               onClick={handleAdd}
               disabled={loading || !name || code.length !== 4}
-              className={cn(
-                "p-2 rounded-lg transition-all",
-                (loading || !name || code.length !== 4) ? "bg-slate-300" : "bg-red-600 text-white"
-              )}
+              className="w-full py-4 bg-red-600 text-white font-black rounded-2xl shadow-lg border-b-4 border-red-800 active:scale-95 transition-all disabled:opacity-50"
             >
-              {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent animate-spin rounded-full" /> : <Plus className="w-5 h-5" />}
+              {loading ? 'SALVANDO...' : 'CADASTRAR UNIDADE'}
             </button>
           </div>
-        </div>
+        )}
       </div>
-      {stores.map(s => (
-        <div key={s.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <span className="bg-slate-100 px-2 py-1 rounded text-[10px] font-mono font-bold text-slate-600 border border-slate-200">{s.code}</span>
-            <span className="font-bold text-slate-700">{s.name}</span>
+
+      {/* Selected Store Details */}
+      {selectedStore && !showAddForm && (
+        <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100 animate-in slide-in-from-bottom-4 duration-300">
+          <div className="flex justify-between items-start mb-6">
+            <div className="space-y-1">
+              <span className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-red-100">
+                Unidade {selectedStore.code}
+              </span>
+              <h2 className="text-2xl font-black text-slate-800 italic uppercase">
+                {selectedStore.name}
+              </h2>
+            </div>
           </div>
+
+          <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 mb-6">
+            <div className="flex items-center space-x-4 mb-4">
+              <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center border border-slate-100 text-red-600">
+                <Users className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Informações Gerais</p>
+                <p className="font-bold text-slate-700">Gestão da Unidade</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              Esta unidade está devidamente cadastrada no sistema. O código {selectedStore.code} é utilizado para vinculação de produções e usuários.
+            </p>
+          </div>
+
           <button 
-            onClick={() => handleDelete(s.id)} 
+            onClick={() => handleDelete(selectedStore.id)} 
             disabled={loading}
             className={cn(
-              "p-2 rounded-lg transition-all font-black uppercase text-[10px]",
-              loading ? "opacity-50" : 
-              confirmingId === s.id ? "bg-red-600 text-white px-3" : "text-slate-400 hover:text-red-500 bg-slate-50"
+              "w-full py-4 rounded-2xl font-black transition-all flex items-center justify-center space-x-2 text-sm",
+              confirmingId === selectedStore.id 
+                ? "bg-red-600 text-white shadow-xl animate-pulse" 
+                : "bg-slate-50 text-slate-400 hover:text-red-600 border border-slate-100"
             )}
           >
-            {loading && confirmingId === s.id ? "Excluindo..." : confirmingId === s.id ? "CONFIRMAR" : <Trash2 className="w-4 h-4" />}
+            <Trash2 className="w-5 h-5" />
+            <span>{confirmingId === selectedStore.id ? "CONFIRMAR EXCLUSÃO" : "EXCLUIR UNIDADE"}</span>
           </button>
         </div>
-      ))}
+      )}
+
+      {/* Empty State */}
+      {!selectedStoreId && !showAddForm && (
+        <div className="py-12 flex flex-col items-center justify-center text-center opacity-40">
+          <div className="w-20 h-20 bg-slate-100 rounded-[35px] flex items-center justify-center mb-4">
+            <StoreIcon className="w-10 h-10 text-slate-300" />
+          </div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Selecione uma loja para visualizar</p>
+        </div>
+      )}
     </div>
   );
 }

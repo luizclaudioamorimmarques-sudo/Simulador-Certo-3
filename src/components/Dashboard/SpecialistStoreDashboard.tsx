@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
-import { User, Product, Production, Goal, Reminder } from '@/src/types';
+import { User, Product, Production, Goal, Reminder, Store } from '@/src/types';
 import { 
   LogOut, Plus, Search, Calendar, Package, ArrowUpRight, 
   TrendingUp, Wallet, Clock, Bell, Trash2, Star, Edit, FileText
@@ -83,8 +83,10 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
       }
 
       // Fetch all users in the store to get global production
-      const { data: storeUsers } = await supabase.from('users').select('id').eq('store_id', storeId);
+      const { data: storeUsers } = await supabase.from('users').select('id, stores(*)').eq('store_id', storeId);
       const userIds = storeUsers ? storeUsers.map(u => u.id) : [user.id];
+      const currentStore = (storeUsers as any)?.[0]?.stores as Store | undefined;
+      const npsValue = currentStore?.nps || 0;
 
       console.log('Fetching global store productions for:', { storeId, startDate, endDate });
 
@@ -114,15 +116,6 @@ export default function SpecialistStoreDashboard({ user, onLogout }: DashboardPr
           }
         });
 
-        // Fetch NPS Multiplier
-        const { data: npsData } = await supabase
-          .from('indicators')
-          .select('value')
-          .eq('name', 'NPS')
-          .eq('month', selectedMonth)
-          .maybeSingle();
-        const npsValue = npsData?.value || 0;
-        
         const { data: rulesData } = await supabase.from('indicator_rules').select('*').eq('indicator_name', 'NPS');
         let npsMultiplier = 1;
         if (rulesData) {
