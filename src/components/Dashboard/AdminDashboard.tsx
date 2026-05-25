@@ -10,6 +10,8 @@ import { cn, isCurrencyProduct } from '@/src/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import IndicatorManager from './IndicatorManager';
+import GoalView from './Goals/GoalView';
+import GoalManagement from './Goals/GoalManagement';
 
 interface AdminDashboardProps {
   user: User;
@@ -35,12 +37,11 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const [userFilterStore, setUserFilterStore] = useState<string>('all');
 
   // Goals State
-  const [goalMonth, setGoalMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
-  const [goalSubTab, setGoalSubTab] = useState<'manage' | 'maintain'>('manage');
-
+  const [goalSubTab, setGoalSubTab] = useState<'view' | 'manage'>('view');
+  
   useEffect(() => {
     fetchData();
-  }, [activeTab, prodStore, prodMonth, prodBlock, goalMonth, userFilterStore]);
+  }, [activeTab, prodStore, prodMonth, prodBlock, userFilterStore]);
 
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
@@ -72,13 +73,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
         const { data } = await supabase.from('products').select('*').order('block');
         if (data) setProducts(data);
       } else if (activeTab === 'goals') {
-        const [{ data: gData }, { data: pData }] = await Promise.all([
-          supabase.from('goals')
-            .select('*')
-            .or(`month.eq.${goalMonth},month.is.null`),
-          supabase.from('products').select('*').order('block')
-        ]);
-        if (gData) setGoals(gData);
+        const { data: pData } = await supabase.from('products').select('*').order('block');
         if (pData) setProducts(pData);
       } else if (activeTab === 'productions') {
         let query = supabase.from('productions')
@@ -310,40 +305,34 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-4">
                   <div className="flex bg-slate-50 p-1 rounded-xl gap-1 border border-slate-100">
                     <button
+                      onClick={() => setGoalSubTab('view')}
+                      className={cn(
+                        "flex-1 py-2 text-[10px] font-black rounded-lg transition-all uppercase",
+                        goalSubTab === 'view' ? "bg-white text-ferrari shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
+                      )}
+                    >
+                      Visualização
+                    </button>
+                    <button
                       onClick={() => setGoalSubTab('manage')}
                       className={cn(
                         "flex-1 py-2 text-[10px] font-black rounded-lg transition-all uppercase",
                         goalSubTab === 'manage' ? "bg-white text-ferrari shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
                       )}
                     >
-                      Gerenciar Metas
-                    </button>
-                    <button
-                      onClick={() => setGoalSubTab('maintain')}
-                      className={cn(
-                        "flex-1 py-2 text-[10px] font-black rounded-lg transition-all uppercase",
-                        goalSubTab === 'maintain' ? "bg-white text-ferrari shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
-                      )}
-                    >
-                      Manter Metas
+                      Gerenciamento
                     </button>
                   </div>
                 </div>
 
-                {goalSubTab === 'manage' ? (
-                  <GoalManager 
-                    goals={goals} 
-                    onRefresh={() => { fetchData(); }} 
-                    focusMode={false}
-                    currentMonth={goalMonth}
-                    onMonthChange={setGoalMonth}
-                    products={products}
-                  />
+                {goalSubTab === 'view' ? (
+                  <GoalView user={user} stores={stores} />
                 ) : (
-                  <MaintainGoals 
-                    currentMonth={goalMonth}
-                    onMonthChange={setGoalMonth}
-                    onRefresh={fetchData}
+                  <GoalManagement 
+                    user={user} 
+                    stores={stores} 
+                    products={products} 
+                    onRefresh={fetchData} 
                   />
                 )}
               </div>
@@ -1414,7 +1403,7 @@ function MaintainGoals({ currentMonth, onMonthChange, onRefresh }: { currentMont
                             {g.block}
                             {g.is_focus && <span className="ml-2 bg-orange-100 text-orange-600 px-1 py-0.5 rounded text-[7px] font-black uppercase">FOCO</span>}
                           </p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase">R$ {g.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">R$ {g.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </div>
                       </div>
                       <span className={cn(

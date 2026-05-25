@@ -129,7 +129,7 @@ export default function ReportsTab({ user, specialists, products, selectedMonth 
 
       doc.setTextColor(180, 0, 0);
       doc.setFontSize(14);
-      doc.text(`R$ ${stats.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 25, currentY + 15);
+      doc.text(`R$ ${stats.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 25, currentY + 15);
       
       if (reportType === 'monthly') {
         doc.text(`${stats.totalAchievement}%`, 115, currentY + 15);
@@ -151,14 +151,14 @@ export default function ReportsTab({ user, specialists, products, selectedMonth 
           if (reportType === 'daily') {
             return [
               block.toUpperCase(),
-              `R$ ${blockProd.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+              `R$ ${blockProd.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             ];
           }
 
           return [
             block.toUpperCase(),
-            `R$ ${blockGoal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            `R$ ${blockProd.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            `R$ ${blockGoal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            `R$ ${blockProd.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
             `${blockGoal > 0 ? Math.round((blockProd / blockGoal) * 100) : 0}%`
           ];
         });
@@ -188,14 +188,14 @@ export default function ReportsTab({ user, specialists, products, selectedMonth 
           if (reportType === 'daily') {
             return [
               block.toUpperCase(),
-              `R$ ${fProd.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+              `R$ ${fProd.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             ];
           }
 
           return [
             block.toUpperCase(),
-            `R$ ${fGoal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            `R$ ${fProd.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            `R$ ${fGoal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            `R$ ${fProd.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
             fGoal > 0 ? `${Math.round((fProd / fGoal) * 100)}%` : '0%'
           ];
         });
@@ -233,7 +233,7 @@ export default function ReportsTab({ user, specialists, products, selectedMonth 
             return [
               pr.name,
               `${count} ${isCurrencyProduct(pr.name, pr.block, pr.segment) ? '' : 'un.'}`,
-              `R$ ${fat.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+              `R$ ${fat.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             ];
           });
 
@@ -273,14 +273,14 @@ export default function ReportsTab({ user, specialists, products, selectedMonth 
            if (reportType === 'daily') {
              return [
                block.toUpperCase(),
-               `R$ ${totalFat.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+               `R$ ${totalFat.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
              ];
            }
 
            return [
              block.toUpperCase(),
-             `R$ ${mGoal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-             `R$ ${totalFat.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+             `R$ ${mGoal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+             `R$ ${totalFat.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
              `${mGoal > 0 ? Math.round((totalFat / mGoal) * 100) : 0}%`
            ];
         });
@@ -310,14 +310,14 @@ export default function ReportsTab({ user, specialists, products, selectedMonth 
           if (reportType === 'daily') {
             return [
               block.toUpperCase(),
-              `R$ ${fProd.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+              `R$ ${fProd.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             ];
           }
 
           return [
             block.toUpperCase(),
-            `R$ ${fGoal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            `R$ ${fProd.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            `R$ ${fGoal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            `R$ ${fProd.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
             fGoal > 0 ? `${Math.round((fProd / fGoal) * 100)}%` : '0%'
           ];
         });
@@ -365,7 +365,7 @@ export default function ReportsTab({ user, specialists, products, selectedMonth 
               return [
                 name,
                 `${data.count} ${isCurrencyProduct(name, block, blockSales.find(s => s.product?.name === name)?.product?.segment) ? '' : 'un.'}`,
-                `R$ ${data.fat.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                `R$ ${data.fat.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               ];
             });
 

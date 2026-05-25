@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
 import { User, Product, Production, Goal, Reminder, UserProfile, Store } from '@/src/types';
-import { LogOut, Send, Search, TrendingUp, Wallet, Users, Trash2, Check, Plus, Calendar, Package, ArrowUpRight, Star, Edit, BarChart3, Clock, RefreshCcw, Bell, FileText } from 'lucide-react';
+import { LogOut, Send, Search, TrendingUp, Wallet, Users, Trash2, Check, Plus, Calendar, Package, ArrowUpRight, Star, Edit, BarChart3, Clock, RefreshCcw, Bell, FileText, Target } from 'lucide-react';
 import { cn, isCurrencyProduct, getAchievementColor, getAchievementTextColor } from '@/src/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import IndicatorManager from './IndicatorManager';
 import ReportsTab from '../Reports/ReportsTab';
+import GoalView from './Goals/GoalView';
+import GoalManagement from './Goals/GoalManagement';
 
 export default function LeaderDashboard({ user, onLogout }: { user: User, onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState('home');
@@ -17,7 +19,9 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
   const [specialists, setSpecialists] = useState<User[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(false);
+  const [goalSubTab, setGoalSubTab] = useState<'view' | 'manage'>('view');
   const [editingProduction, setEditingProduction] = useState<any | null>(null);
   const [stats, setStats] = useState<any>({
     Créditos: { faturamento: 0, remuneração: 0, meta: 0 },
@@ -81,6 +85,10 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
       const { data: pData } = await supabase.from('products').select('*');
       if (pData) setProducts(pData);
 
+      // Fetch store details
+      const { data: storesData } = await supabase.from('stores').select('*').eq('id', leaderStoreId);
+      if (storesData) setStores(storesData);
+
       // Fetch all users in this store
       const { data: sData, error: sError } = await supabase
         .from('users')
@@ -99,7 +107,10 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
       }
 
       // Fetch goals for Leader profile the selected month
-      const { data: gData } = await supabase.from('goals').select('*').eq('profile', 'Líder').eq('month', selectedMonth);
+      const { data: gData } = await supabase.from('goals').select('*')
+        .eq('profile', 'Líder')
+        .eq('month', selectedMonth)
+        .eq('store_id', leaderStoreId);
       if (gData) setGoals(gData);
 
       // Ensure leader.id is included in the production sum list
@@ -267,6 +278,7 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
           ['home', 'Início', TrendingUp], 
           ['add', 'Lançar', Plus],
           ['view', 'Equipe', Search], 
+          ['goals', 'Metas', Target],
           ['rem', 'Ganhos', Wallet], 
           ['msg', 'Aviso', Send],
           ['ind', 'Indicadores', BarChart3],
@@ -307,6 +319,44 @@ export default function LeaderDashboard({ user, onLogout }: { user: User, onLogo
 
         {loading ? <div className="flex justify-center p-10"><div className="animate-spin h-8 w-8 border-t-2 border-red-600 rounded-full" /></div> : (
           <div className="max-w-md mx-auto space-y-4">
+            {activeTab === 'goals' && (
+              <div className="space-y-4">
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-4">
+                  <div className="flex bg-slate-50 p-1 rounded-xl gap-1 border border-slate-100">
+                    <button
+                      onClick={() => setGoalSubTab('view')}
+                      className={cn(
+                        "flex-1 py-2 text-[10px] font-black rounded-lg transition-all uppercase",
+                        goalSubTab === 'view' ? "bg-white text-ferrari shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
+                      )}
+                    >
+                      Visualização
+                    </button>
+                    <button
+                      onClick={() => setGoalSubTab('manage')}
+                      className={cn(
+                        "flex-1 py-2 text-[10px] font-black rounded-lg transition-all uppercase",
+                        goalSubTab === 'manage' ? "bg-white text-ferrari shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
+                      )}
+                    >
+                      Gerenciamento
+                    </button>
+                  </div>
+                </div>
+
+                {goalSubTab === 'view' ? (
+                  <GoalView user={user} stores={stores} />
+                ) : (
+                  <GoalManagement 
+                    user={user} 
+                    stores={stores} 
+                    products={products} 
+                    onRefresh={fetchData} 
+                  />
+                )}
+              </div>
+            )}
+
             {activeTab === 'home' && (
               <div className="bg-white p-5 rounded-3xl border space-y-4 shadow-sm">
                 <div className="flex justify-between items-start">

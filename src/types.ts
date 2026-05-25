@@ -39,6 +39,7 @@ export interface Goal {
   value: number;
   is_focus?: boolean;
   month: string; // YYYY-MM
+  store_id?: string;
 }
 
 export interface Production {
